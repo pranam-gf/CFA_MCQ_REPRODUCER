@@ -10,8 +10,8 @@ from openai import OpenAI
 import google.generativeai as genai
 from writerai import Writer
 
-
 from . import config
+from . import prompts
 
 logger = logging.getLogger(__name__)
 
@@ -21,28 +21,9 @@ def generate_prompt(entry: dict, model_type: str | None = None) -> str:
     question_full_text = entry.get('question', 'Question not available.')
 
     if model_type == "gemini":
-        return f"""Given the following context (vignette) and a multiple-choice question (which includes the question stem and all options), please analyze the information and select the best answer.
-
-Respond with ONLY the single uppercase letter of your chosen option (e.g., A, B, C). Do not include any other text, explanation, or punctuation.
-
-Context (Vignette):
-{vignette}
-
-Question and Options:
-{question_full_text}
-
-Your chosen option letter:"""
+        return prompts.GEMINI_PROMPT_TEMPLATE.format(vignette=vignette, question_full_text=question_full_text)
     else:
-        prompt_instruction = "Respond with ONLY the single letter corresponding to the correct answer (e.g., A, B, or C). Do not include any other text, explanation, or formatting."
-        return f"""
-Consider the following vignette:
-{vignette}
-
-Based on the vignette, answer the following question:
-{question_full_text}
-
-{prompt_instruction}
-"""
+        return prompts.DEFAULT_PROMPT_TEMPLATE.format(vignette=vignette, question_full_text=question_full_text)
 
 def get_llm_response(prompt: str, model_config: dict) -> dict | None:
     """
@@ -254,6 +235,28 @@ def get_llm_response(prompt: str, model_config: dict) -> dict | None:
                 input_tokens = len(prompt.split()) * 1.3
                 output_tokens = len(response_text_for_error.split()) * 1.3
                 
+        elif model_type == "groq":
+            if not config.GROQ_API_KEY:
+                logger.error(f"Missing Groq API key for model {config_id}.")
+                return None
+            groq_client = OpenAI(
+                api_key=config.GROQ_API_KEY,
+                base_url="https://api.groq.com/openai/v1",
+            )
+            api_response = groq_client.chat.completions.create(
+                model=model_id,
+                messages=[{"role": "user", "content": prompt}],
+                **parameters
+            )
+            response_text_for_error = api_response.choices[0].message.content.strip()
+            if hasattr(api_response, 'usage') and api_response.usage:
+                input_tokens = api_response.usage.prompt_tokens
+                output_tokens = api_response.usage.completion_tokens
+            else:
+                logger.warning(f"Groq token count not found for {config_id}, estimating.")
+                input_tokens = len(prompt.split()) * 1.3
+                output_tokens = len(response_text_for_error.split()) * 1.3
+
         elif model_type == "sagemaker":
             if not config.AWS_ACCESS_KEY_ID or not config.AWS_SECRET_ACCESS_KEY:
                 logger.error(f"Missing AWS credentials for SageMaker model {config_id}.")

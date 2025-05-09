@@ -96,6 +96,9 @@ def main():
         elif model_type_loop == "writer" and not config.WRITER_API_KEY:
             logger.error(f"Skipping {config_id_loop}: Missing Writer API key.")
             credentials_ok = False
+        elif model_type_loop == "groq" and not config.GROQ_API_KEY:
+            logger.error(f"Skipping {config_id_loop}: Missing Groq API key.")
+            credentials_ok = False
         
         if not credentials_ok:
             all_model_results_summary[config_id_loop] = {"error": "Missing credentials", "num_processed": 0}

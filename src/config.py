@@ -36,6 +36,7 @@ WRITER_API_KEY = get_credential("WRITER_API_KEY")
 AWS_ACCESS_KEY_ID = get_credential("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = get_credential("AWS_SECRET_ACCESS_KEY")
 AWS_REGION = get_credential("AWS_REGION", "us-east-1")
+GROQ_API_KEY = get_credential("GROQ_API_KEY")
 
 
 
@@ -205,6 +206,16 @@ ALL_MODEL_CONFIGS = [
             "temperature": 0.1,
             "max_tokens": 200
         }
+    },
+    {
+        "config_id": "deepseek-via-groq",
+        "type": "groq",
+        "model_id": "deepseek-r1-distill-llama-70b",
+        "parameters": {
+            "temperature": 0.1,
+            "max_tokens": 512,
+            "top_p": 0.9
+        }
     }
 ]
 
@@ -232,4 +243,6 @@ if any(m.get('type') == 'gemini' for m in ALL_MODEL_CONFIGS) and not GEMINI_API_
 if any(m.get('type') == 'xai' for m in ALL_MODEL_CONFIGS) and not XAI_API_KEY:
     logger.warning("XAI_API_KEY not found. Grok models will fail.")
 if any(m.get('type') == 'writer' for m in ALL_MODEL_CONFIGS) and not WRITER_API_KEY: 
-    logger.warning("WRITER_API_KEY not found. Writer models will fail.") 
+    logger.warning("WRITER_API_KEY not found. Writer models will fail.")
+if any(m.get('type') == 'groq' for m in ALL_MODEL_CONFIGS) and not GROQ_API_KEY:
+    logger.warning("GROQ_API_KEY not found. Groq models will fail.") 
