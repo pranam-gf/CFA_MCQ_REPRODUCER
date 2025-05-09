@@ -212,8 +212,8 @@ ALL_MODEL_CONFIGS = [
         "type": "groq",
         "model_id": "deepseek-r1-distill-llama-70b",
         "parameters": {
-            "temperature": 0.1,
-            "max_tokens": 512,
+            "temperature": 0.6,
+            "max_tokens": 2000,
             "top_p": 0.9
         }
     }

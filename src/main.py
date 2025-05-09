@@ -7,12 +7,13 @@ and generation of comparison charts.
 
 import json
 import logging
-import numpy as np 
+import numpy as np
 from pathlib import Path
-from . import config 
+from . import config
 from . import llm_clients
 from . import evaluation
 from . import plotting
+from . import ui_utils
 import sys
 import questionary
 
@@ -21,27 +22,49 @@ logger = logging.getLogger(__name__)
 
 def main():
     logger.info("Starting CFA MCQ Reproducer pipeline...")
-    config.RESULTS_DIR.mkdir(parents=True, exist_ok=True) 
-    config.CHARTS_DIR.mkdir(parents=True, exist_ok=True) 
+    print("Starting CFA MCQ Reproducer pipeline...")
+
+    config.RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    config.CHARTS_DIR.mkdir(parents=True, exist_ok=True)
+
     processed_data = None
     if config.FILLED_JSON_PATH.exists():
         logger.info(f"Loading processed data from: {config.FILLED_JSON_PATH}")
+        print(f"Loading data from: {config.FILLED_JSON_PATH}")
+        data_loading = ui_utils.LoadingAnimation(message="Loading data")
+        data_loading.start()
+
         try:
             with open(config.FILLED_JSON_PATH, 'r', encoding='utf-8') as f:
                 processed_data = json.load(f)
+            data_loading.stop()
+
             if not isinstance(processed_data, list) or not processed_data:
+                ui_utils.print_error(f"{config.FILLED_JSON_PATH} is empty or not a valid JSON list.")
                 logger.error(f"{config.FILLED_JSON_PATH} is empty or not a valid JSON list. Exiting.")
                 return
+
+            ui_utils.print_success(f"Successfully loaded {len(processed_data)} entries.")
             logger.info(f"Successfully loaded {len(processed_data)} entries.")
+
         except json.JSONDecodeError:
+            data_loading.stop()
+            ui_utils.print_error(f"Error decoding JSON from {config.FILLED_JSON_PATH}.")
             logger.error(f"Error decoding JSON from {config.FILLED_JSON_PATH}. Exiting.", exc_info=True)
             return
+
         except Exception as e:
+            data_loading.stop()
+            ui_utils.print_error(f"Error reading {config.FILLED_JSON_PATH}: {e}")
             logger.error(f"Error reading {config.FILLED_JSON_PATH}: {e}. Exiting.", exc_info=True)
             return
     else:
+        ui_utils.print_error(f"Input data file not found: {config.FILLED_JSON_PATH}")
         logger.error(f"Input data file not found: {config.FILLED_JSON_PATH}. Exiting.")
         return
+    print("\nPreparing available LLM models...")
+    model_loading = ui_utils.LoadingAnimation(message="Loading model configurations")
+    model_loading.start()
 
     model_choices = [
         {
@@ -52,20 +75,26 @@ def main():
     ]
     model_choices.insert(0, {"name": "[Run All LLMs]", "value": "__ALL__"})
 
+    model_loading.stop()
+    ui_utils.print_info(f"Found {len(model_choices)-1} available LLM models")
+
+    print("\nPlease select which LLM models to run:")
     selected = questionary.checkbox(
-        "Select which LLM models to run (use spacebar to select, arrows to move, enter to confirm):",
+        "Select models (use spacebar to select, arrows to move, enter to confirm):",
         choices=model_choices,
         validate=lambda a: True if a else "Select at least one model."
     ).ask()
 
     if not selected:
-        print("No models selected. Exiting.")
+        ui_utils.print_warning("No models selected. Exiting.")
         return
 
     if "__ALL__" in selected:
         logger.info("Running all LLM models.")
+        ui_utils.print_info(f"Running all {len(model_choices)-1} LLM models")
     else:
         logger.info(f"Running selected models: {selected}")
+        ui_utils.print_info(f"Running {len(selected)} selected LLM models")
         config.ALL_MODEL_CONFIGS = [
             m for m in config.ALL_MODEL_CONFIGS
             if m.get('config_id', m.get('model_id')) in selected
@@ -99,15 +128,20 @@ def main():
         elif model_type_loop == "groq" and not config.GROQ_API_KEY:
             logger.error(f"Skipping {config_id_loop}: Missing Groq API key.")
             credentials_ok = False
-        
+
         if not credentials_ok:
             all_model_results_summary[config_id_loop] = {"error": "Missing credentials", "num_processed": 0}
             continue
 
         try:
             logger.info(f"Processing {len(data_for_this_run)} questions with {config_id_loop}...")
-            
+            print(f"\nProcessing {len(data_for_this_run)} questions with {config_id_loop}...")
+
+            loading_animation = ui_utils.LoadingAnimation(message=f"Processing with {config_id_loop}")
+            loading_animation.start()
             llm_run_results_data = llm_clients.process_questions_with_llm(data_for_this_run, model_config_item)
+            loading_animation.stop()
+            ui_utils.print_success(f"Completed processing {len(data_for_this_run)} questions with {config_id_loop}")
 
             avg_time = None
             total_in_tokens = 0
@@ -123,11 +157,11 @@ def main():
 
                 valid_out_tokens = [r.get('output_tokens') for r in llm_run_results_data if r.get('output_tokens') is not None]
                 total_out_tokens = sum(valid_out_tokens) if valid_out_tokens else 0
-                
-                
+
+
                 num_results_for_len = len(llm_run_results_data)
                 avg_answer_len = np.mean([r.get('answer_length', 0) for r in llm_run_results_data]) if num_results_for_len > 0 else 0.0
-            
+
             model_response_filename = config.RESULTS_DIR / f"response_data_{config_id_loop}.json"
             try:
                 with open(model_response_filename, 'w', encoding='utf-8') as f:
@@ -137,9 +171,13 @@ def main():
                 logger.error(f"Failed to save LLM results for {config_id_loop} to {model_response_filename}: {e_save}", exc_info=True)
 
             if llm_run_results_data:
-                logger.info(f"Performing final evaluation on {config_id_loop} results...")                
+                logger.info(f"Performing final evaluation on {config_id_loop} results...")
+                print(f"Evaluating results for {config_id_loop}...")
+                eval_loading = ui_utils.LoadingAnimation(message=f"Evaluating {config_id_loop} results")
+                eval_loading.start()
                 classification_metrics = evaluation.evaluate_classification(llm_run_results_data)
-                
+                eval_loading.stop()
+
                 all_model_results_summary[config_id_loop] = {
                     "metrics": classification_metrics,
                     "avg_response_time": avg_time,
@@ -149,7 +187,10 @@ def main():
                     "num_processed": len(llm_run_results_data),
                     "results_file": str(model_response_filename)
                 }
-                logger.info(f"Evaluation summary for {config_id_loop}: Accuracy: {classification_metrics.get('accuracy'):.4f}")
+
+                accuracy = classification_metrics.get('accuracy', 0.0)
+                logger.info(f"Evaluation summary for {config_id_loop}: Accuracy: {accuracy:.4f}")
+                ui_utils.print_success(f"Evaluation complete for {config_id_loop}: Accuracy: {accuracy:.4f}")
             else:
                 logger.warning(f"No results generated by {config_id_loop}. Skipping evaluation.")
                 all_model_results_summary[config_id_loop] = {
@@ -158,17 +199,21 @@ def main():
         except Exception as model_proc_err:
             logger.error(f"An error occurred while processing model {config_id_loop}: {model_proc_err}", exc_info=True)
             all_model_results_summary[config_id_loop] = {"error": str(model_proc_err), "num_processed": 0}
-            
 
-    
+
+
     logger.info("\n" + "="*30 + " Overall Model Comparison " + "="*30)
-    
+
+    summary_loading = ui_utils.LoadingAnimation(message="Preparing results summary")
+    summary_loading.start()
+
     header = "| {:<30} | {:>8} | {:>12} | {:>19} | {:>18} |".format(
         "Model", "Accuracy", "Avg Time (s)", "Total Output Tokens", "Avg Answer Length"
     )
     logger.info(header)
     logger.info("|" + "-"*32 + "|" + "-"*10 + "|" + "-"*14 + "|" + "-"*21 + "|" + "-"*20 + "|")
 
+    summary_rows = []
     for config_id_summary, summary_results in all_model_results_summary.items():
         if "error" in summary_results:
             row = "| {:<30} | {:^8} | {:^12} | {:^19} | {:^18} |".format(
@@ -183,21 +228,38 @@ def main():
             token_str = f"{tokens:.0f}" if tokens is not None else "N/A"
             ans_len = summary_results.get('avg_answer_length')
             ans_len_str = f"{ans_len:.1f}" if ans_len is not None else "N/A"
-            
+
             row = "| {:<30} | {:>8.4f} | {:>12} | {:>19} | {:>18} |".format(
                 config_id_summary, acc, time_str, token_str, ans_len_str
             )
         logger.info(row)
+        summary_rows.append(row)
     logger.info("="*110)
 
-    
+    summary_loading.stop()
+
+    print("\n" + "="*30 + " Overall Model Comparison " + "="*30)
+    print(header)
+    print("|" + "-"*32 + "|" + "-"*10 + "|" + "-"*14 + "|" + "-"*21 + "|" + "-"*20 + "|")
+    for row in summary_rows:
+        print(row)
+    print("="*110)
+
+
     if all_model_results_summary:
+        print("\nGenerating comparison charts...")
+        chart_loading = ui_utils.LoadingAnimation(message="Generating comparison charts")
+        chart_loading.start()
         plotting.generate_all_charts(all_model_results_summary, config.CHARTS_DIR)
+        chart_loading.stop()
+        ui_utils.print_success(f"Charts generated successfully in {config.CHARTS_DIR}")
     else:
         logger.warning("No model results to plot.")
+        ui_utils.print_warning("No model results to plot.")
 
     logger.info("CFA MCQ Reproducer pipeline finished.")
     logger.info(f"Results and charts saved in: {config.RESULTS_DIR}")
+    ui_utils.print_info(f"CFA MCQ Reproducer pipeline finished. Results saved in: {config.RESULTS_DIR}")
 
 if __name__ == "__main__":
-    main() 
+    main()

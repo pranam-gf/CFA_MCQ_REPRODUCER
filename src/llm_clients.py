@@ -5,6 +5,8 @@ import time
 import json
 import logging
 import re
+import sys
+import threading
 import boto3
 from openai import OpenAI
 import google.generativeai as genai
@@ -12,6 +14,7 @@ from writerai import Writer
 
 from . import config
 from . import prompts
+from . import ui_utils
 
 logger = logging.getLogger(__name__)
 
@@ -41,13 +44,13 @@ def get_llm_response(prompt: str, model_config: dict) -> dict | None:
     """
     model_type = model_config.get("type")
     model_id = model_config.get("model_id")
-    parameters = model_config.get("parameters", {}).copy() 
-    config_id = model_config.get("config_id", model_id) 
+    parameters = model_config.get("parameters", {}).copy()
+    config_id = model_config.get("config_id", model_id)
 
-    
+
     parameters.pop('response_format', None)
-    
-    
+
+
 
     logger.info(f"Sending prompt to {model_type} model: {config_id} (requesting single letter answer)")
     start_time = time.time()
@@ -67,13 +70,13 @@ def get_llm_response(prompt: str, model_config: dict) -> dict | None:
                 aws_access_key_id=config.AWS_ACCESS_KEY_ID,
                 aws_secret_access_key=config.AWS_SECRET_ACCESS_KEY
             )
-            accept = 'application/json' 
-            contentType = 'application/json' 
+            accept = 'application/json'
+            contentType = 'application/json'
 
             if "anthropic" in model_id:
                 messages = [{"role": "user", "content": prompt}]
-                
-                
+
+
                 body = json.dumps({
                     "messages": messages,
                     "anthropic_version": parameters.get("anthropic_version", "bedrock-2023-05-31"),
@@ -87,7 +90,7 @@ def get_llm_response(prompt: str, model_config: dict) -> dict | None:
                 response_text_for_error = response_body.get('content', [{}])[0].get('text', '')
                 input_tokens = response_body.get('usage', {}).get('input_tokens')
                 output_tokens = response_body.get('usage', {}).get('output_tokens')
-            elif "mistral" in model_id or "meta" in model_id: 
+            elif "mistral" in model_id or "meta" in model_id:
                 body = json.dumps({"prompt": prompt, **parameters})
                 api_response = bedrock_client.invoke_model(
                     body=body, modelId=model_id, accept=accept, contentType=contentType
@@ -98,7 +101,7 @@ def get_llm_response(prompt: str, model_config: dict) -> dict | None:
                     if 'usage' in response_body:
                         input_tokens = response_body['usage'].get('input_tokens')
                         output_tokens = response_body['usage'].get('output_tokens')
-                elif "meta" in model_id: 
+                elif "meta" in model_id:
                     response_text_for_error = response_body.get('generation', '')
                     if hasattr(api_response, 'get') and api_response.get('ResponseMetadata'):
                         headers = api_response.get('ResponseMetadata', {}).get('HTTPHeaders', {})
@@ -123,7 +126,7 @@ def get_llm_response(prompt: str, model_config: dict) -> dict | None:
             api_response = openai_client.chat.completions.create(
                 model=model_id,
                 messages=[{"role": "user", "content": prompt}],
-                **parameters 
+                **parameters
             )
             response_text_for_error = api_response.choices[0].message.content.strip()
             if api_response.usage:
@@ -153,9 +156,9 @@ def get_llm_response(prompt: str, model_config: dict) -> dict | None:
                 logger.error(f"Missing Gemini API key for model {config_id}.")
                 return None
             genai.configure(api_key=config.GEMINI_API_KEY)
-            
+
             gemini_model_instance = genai.GenerativeModel(model_id)
-            
+
             logger.debug(f"Gemini prompt for {config_id}:\n{prompt}")
             api_response = gemini_model_instance.generate_content(
                 prompt
@@ -163,7 +166,7 @@ def get_llm_response(prompt: str, model_config: dict) -> dict | None:
             logger.debug(f"Gemini raw api_response object for {config_id}: {api_response}")
             if hasattr(api_response, 'prompt_feedback'):
                 logger.info(f"Gemini prompt_feedback for {config_id}: {api_response.prompt_feedback}")
-            
+
             if hasattr(api_response, 'candidates') and api_response.candidates:
                 logger.info(f"Gemini candidates object for {config_id}: {api_response.candidates}")
                 for i, cand in enumerate(api_response.candidates):
@@ -177,8 +180,8 @@ def get_llm_response(prompt: str, model_config: dict) -> dict | None:
                 logger.info(f"No candidates found in Gemini response for {config_id}")
 
 
-            response_text_for_error = "" 
-            if hasattr(api_response, 'text') and api_response.text: 
+            response_text_for_error = ""
+            if hasattr(api_response, 'text') and api_response.text:
                 response_text_for_error = api_response.text.strip()
             elif hasattr(api_response, 'candidates') and api_response.candidates:
                 try:
@@ -188,15 +191,15 @@ def get_llm_response(prompt: str, model_config: dict) -> dict | None:
                              response_text_for_error = candidate.content.parts[0].text.strip()
                         else:
                             logger.warning(f"Gemini candidate {config_id} content part has no text attribute: {candidate.content.parts[0]}")
-                    
+
                     if hasattr(candidate, 'finish_reason'):
                          logger.info(f"Gemini candidate finish_reason for {config_id}: {candidate.finish_reason}")
                 except Exception as e_parse_candidate:
                     logger.warning(f"Error parsing Gemini candidate for {config_id}: {e_parse_candidate}")
-            
+
             if not response_text_for_error:
                 logger.warning(f"Gemini response text is empty for {config_id} after checking .text and .candidates[0].content.parts[0].text.")
-                
+
                 if hasattr(api_response, 'prompt_feedback') and api_response.prompt_feedback.block_reason:
                     logger.error(f"Gemini content blocked for {config_id}. Reason: {api_response.prompt_feedback.block_reason} - Details: {api_response.prompt_feedback.safety_ratings}")
                 elif hasattr(api_response, 'candidates') and api_response.candidates:
@@ -212,7 +215,7 @@ def get_llm_response(prompt: str, model_config: dict) -> dict | None:
                 output_tokens = api_response.usage_metadata.candidates_token_count
             elif input_tokens is None:
                 logger.warning(f"Gemini token count not found for {config_id}, estimating.")
-                input_tokens = len(prompt.split()) * 1.3 
+                input_tokens = len(prompt.split()) * 1.3
                 output_tokens = len(response_text_for_error.split()) * 1.3
 
         elif model_type == "writer":
@@ -234,7 +237,7 @@ def get_llm_response(prompt: str, model_config: dict) -> dict | None:
                 logger.warning(f"Writer token count not found for {config_id}, estimating.")
                 input_tokens = len(prompt.split()) * 1.3
                 output_tokens = len(response_text_for_error.split()) * 1.3
-                
+
         elif model_type == "groq":
             if not config.GROQ_API_KEY:
                 logger.error(f"Missing Groq API key for model {config_id}.")
@@ -268,40 +271,40 @@ def get_llm_response(prompt: str, model_config: dict) -> dict | None:
                 aws_secret_access_key=config.AWS_SECRET_ACCESS_KEY
             )
             body_payload = {"inputs": prompt, "parameters": parameters}
-            
-            
+
+
             body = json.dumps(body_payload)
 
-            endpoint_name = model_id.split('/')[-1] 
+            endpoint_name = model_id.split('/')[-1]
             api_response = sagemaker_client.invoke_endpoint(
                 EndpointName=endpoint_name,
                 ContentType='application/json',
                 Body=body
             )
             response_body = json.loads(api_response['Body'].read().decode())
-            
-            
-            
-            
+
+
+
+
             if isinstance(response_body, list) and len(response_body) > 0 and isinstance(response_body[0], dict):
                 if 'generated_text' in response_body[0]:
                     response_text_for_error = response_body[0]['generated_text']
-                
-                else: 
-                    response_text_for_error = str(response_body[0]) 
+
+                else:
+                    response_text_for_error = str(response_body[0])
             elif isinstance(response_body, dict):
-                
+
                 for key in ['generated_text', 'text', 'answer', 'completion', 'generation']:
                     if key in response_body:
                         response_text_for_error = response_body[key]
                         break
-                else: 
+                else:
                     response_text_for_error = str(response_body)
             else:
-                response_text_for_error = str(response_body) 
-            
+                response_text_for_error = str(response_body)
+
             logger.warning(f"SageMaker token count not directly available for {config_id}, estimating.")
-            input_tokens = len(prompt.split()) * 1.3 
+            input_tokens = len(prompt.split()) * 1.3
             output_tokens = len(response_text_for_error.split()) * 1.3
         else:
             logger.error(f"Unsupported model type: {model_type} for model {config_id}")
@@ -315,15 +318,15 @@ def get_llm_response(prompt: str, model_config: dict) -> dict | None:
         logger.error(f"API call to {config_id} failed after {elapsed_time:.2f}s: {e}. Raw response snippet: {response_text_for_error[:100]}...")
         return None
 
-    
-    
+
+
     cleaned_answer = "X"
 
-    if model_type == "gemini": 
-        pass 
-    elif response_text_for_error: 
-        
-        
+    if model_type == "gemini":
+        pass
+    elif response_text_for_error:
+
+
         match = re.search(r"^(?:[^a-zA-Z0-9]*?(?:Answer(?: is)?)?:?\s*)?([A-Z])", response_text_for_error.strip(), re.IGNORECASE)
         if match:
             cleaned_answer = match.group(1).upper()
@@ -333,24 +336,24 @@ def get_llm_response(prompt: str, model_config: dict) -> dict | None:
     else:
         logger.error(f"Empty or no usable response text received for {config_id}. Marking as X.")
 
-    
-    
+
+
     response_json = {
         "answer": cleaned_answer,
-        "explanation": ""  
+        "explanation": ""
     }
-    
+
     logger.debug(f"Final parsed response for {config_id}: {response_json}")
 
     return {
         "response_json": response_json,
         "response_time": elapsed_time,
         "input_tokens": input_tokens,
-        "output_tokens": output_tokens 
-                                      
-                                      
-                                      
-                                      
+        "output_tokens": output_tokens
+
+
+
+
     }
 
 def process_questions_with_llm(data: list[dict], model_config_item: dict) -> list[dict]:
@@ -362,7 +365,20 @@ def process_questions_with_llm(data: list[dict], model_config_item: dict) -> lis
     config_id = model_config_item.get("config_id", model_config_item.get("model_id"))
     model_type = model_config_item.get("type")
 
+    loading_animation = None
+    for thread in threading.enumerate():
+        if hasattr(thread, '_target') and thread._target and 'LoadingAnimation' in str(thread._target):
+            frame = sys._current_frames().get(thread.ident)
+            if frame:
+                for local_var in frame.f_locals.values():
+                    if isinstance(local_var, ui_utils.LoadingAnimation):
+                        loading_animation = local_var
+                        break
+
     for i, entry in enumerate(data):
+        if loading_animation:
+            loading_animation.update_progress(i+1, total_questions)
+
         logger.info(f"Processing question {i+1}/{total_questions} with model {config_id}...")
         prompt = generate_prompt(entry, model_type=model_type)
         llm_data = get_llm_response(prompt, model_config_item)
@@ -373,7 +389,7 @@ def process_questions_with_llm(data: list[dict], model_config_item: dict) -> lis
         current_input_tokens = None
         current_output_tokens = None
         answer_length = 0
-        
+
 
         if llm_data and llm_data.get('response_json'):
             parsed_response = llm_data['response_json']
@@ -383,25 +399,25 @@ def process_questions_with_llm(data: list[dict], model_config_item: dict) -> lis
 
             llm_answer = parsed_response.get("answer", "").strip().upper()
             answer_length = len(llm_answer)
-            
-            
+
+
             if "error_message" in llm_data:
                 logger.warning(f"Q {i+1} ({config_id}): Problem with LLM response: {llm_data['error_message']}")
-                
+
 
             correct_answer_str = str(entry.get('correctAnswer', '')).strip().upper()
             if not correct_answer_str or "PLACEHOLDER" in correct_answer_str:
                 logger.warning(f"Q {i+1} ({config_id}): Correct answer missing/placeholder. Cannot evaluate correctness.")
                 is_correct = None
             elif llm_answer == "X":
-                is_correct = False 
+                is_correct = False
                 logger.info(f"Q {i+1} ({config_id}): LLM response parsed as 'X' (see previous error for details). Marked as incorrect.")
             elif not llm_answer:
                 is_correct = False
                 logger.warning(f"Q {i+1} ({config_id}): LLM provided an empty or non-standard invalid answer ('{llm_answer}'). Marked as incorrect.")
             else:
                 is_correct = (llm_answer == correct_answer_str)
-            
+
             logger.info(f"Q {i+1} ({config_id}): LLM Ans: '{llm_answer}', Correct: '{correct_answer_str}', Match: {is_correct}, Time: {response_time:.2f}s")
 
         else:
@@ -410,8 +426,8 @@ def process_questions_with_llm(data: list[dict], model_config_item: dict) -> lis
                 logger.error(f"Q {i+1} ({config_id}): Failed to parse LLM response or extract answer (internal error in get_llm_response) after {response_time:.2f}s.")
             else:
                 logger.error(f"Q {i+1} ({config_id}): Failed to get any valid LLM response (API call likely failed).")
-            llm_answer = "ERROR" 
-            is_correct = False 
+            llm_answer = "ERROR"
+            is_correct = False
 
         updated_entry = entry.copy()
         updated_entry.update({
@@ -421,7 +437,7 @@ def process_questions_with_llm(data: list[dict], model_config_item: dict) -> lis
             'input_tokens': current_input_tokens,
             'output_tokens': current_output_tokens,
             'answer_length': answer_length,
-            
+
         })
         results.append(updated_entry)
-    return results 
+    return results
