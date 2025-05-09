@@ -1,7 +1,8 @@
 # CFA MCQ Question Reproducer
 
 This project processes CFA MCQ questions using various Large Language Models (LLMs)
-and evaluates their performance.
+and evaluates their performance. It features an interactive UI with loading animations
+and progress indicators to provide real-time feedback during processing.
 
 ## Project Structure
 
@@ -19,6 +20,7 @@ CFA_MCQ_REPRODUCER/
 │   ├── evaluation.py      # Performance evaluation metrics and functions
 │   ├── plotting.py        # Chart generation functions
 │   ├── prompts.py         # Stores LLM prompt templates
+│   ├── ui_utils.py        # UI utilities for loading animations and colored output
 │   └── main.py            # Main script to run the pipeline
 ├── .env                   # Local environment variables (API keys). Not version controlled.
 ├── requirements.txt       # Python package dependencies
@@ -66,29 +68,51 @@ Navigate to the `CFA_MCQ_REPRODUCER` directory in your terminal.
 Run the main script as a module:
 
 ```bash
-pip install python-dotenv openai Pillow reportlab scikit-learn numpy boto3 google-generativeai matplotlib seaborn kaleido writerai
 python -m src.main
 ```
 
 This will:
-- Load data from `data/updated_data.json`.
-- Iterate through the models defined in `src/config.py`.
-- Query each LLM for answers.
+- Load data from `data/updated_data.json` with a loading animation.
+- Present an interactive model selection interface.
+- Process each question with the selected LLMs, showing real-time progress.
+- Display colored success/error messages for each operation.
 - Save detailed results for each model to a JSON file in the `results/` directory.
-- Calculate evaluation metrics (e.g., accuracy).
+- Calculate and display evaluation metrics (e.g., accuracy).
 - Generate comparison charts in `results/comparison_charts/`.
+- Present a formatted summary table of results.
+
+### Interactive UI Features
+
+The program now includes several UI enhancements:
+
+1. **Loading Animations**: Displayed during long-running operations like:
+   - Data loading
+   - Model selection
+   - LLM processing (with progress updates)
+   - Evaluation
+   - Chart generation
+   - Results saving
+
+2. **Progress Indicators**: Shows real-time progress during LLM processing:
+   ```
+   Processing with GPT-4 [15/50] ⠋
+   ```
+
+3. **Colored Output**:
+   - ✓ Success messages in green
+   - ✗ Error messages in red
+   - ℹ Info messages in blue
+   - ⚠ Warning messages in yellow
+
+4. **Interactive Model Selection**: Choose which LLMs to run using a checkbox interface:
+
+![alt text](img/llm_selection.png)
+
+5. **Formatted Results Summary**: Displays a clear table of results at the end of processing.
 
 ## Configuration
 
 -   **Model Selection:** Edit `ALL_MODEL_CONFIGS` in `src/config.py` to add, remove, or modify LLM configurations.
 -   **Prompt Templates:** Modify prompt templates in `src/prompts.py` to experiment with different phrasings for the LLMs.
 -   **Paths:** File and directory paths are also defined in `src/config.py` and are relative to the project root.
-
-## TODO / Next Steps for Porting Code
-
--   Move `ALL_MODEL_CONFIGS` list from `llm_cfa_reproduce.py` to `CFA_MCQ_REPRODUCER/src/config.py`.
--   Port the LLM interaction logic (`generate_prompt`, `get_llm_response`, `process_questions_with_llm`) into `CFA_MCQ_REPRODUCER/src/llm_clients.py`.
--   Port evaluation functions (`compute_cosine_similarity`, `evaluate_similarity`, `evaluate_classification`) to `CFA_MCQ_REPRODUCER/src/evaluation.py`.
--   Port plotting logic (the entire `# 4. Model Comparison Charts` section) to `CFA_MCQ_REPRODUCER/src/plotting.py`.
--   Update `CFA_MCQ_REPRODUCER/src/main.py` to call these ported functions correctly, passing necessary data and configurations.
--   Ensure all imports are correctly resolved within the new module structure (using relative imports like `from . import config` or absolute imports if the package structure allows, like `from src.config import ...` if running from project root and `src` is added to `PYTHONPATH` or running as module `python -m src.main`). 
+-   **UI Settings:** The loading animation and colored output settings can be modified in `src/ui_utils.py`.
