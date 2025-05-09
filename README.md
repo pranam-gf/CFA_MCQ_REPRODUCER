@@ -18,6 +18,7 @@ CFA_MCQ_REPRODUCER/
 │   ├── llm_clients.py     # Functions for interacting with LLM APIs
 │   ├── evaluation.py      # Performance evaluation metrics and functions
 │   ├── plotting.py        # Chart generation functions
+│   ├── prompts.py         # Stores LLM prompt templates
 │   └── main.py            # Main script to run the pipeline
 ├── .env                   # Local environment variables (API keys). Not version controlled.
 ├── requirements.txt       # Python package dependencies
@@ -51,6 +52,7 @@ CFA_MCQ_REPRODUCER/
     AWS_ACCESS_KEY_ID="your_aws_access_key_id"
     AWS_SECRET_ACCESS_KEY="your_aws_secret_access_key"
     AWS_REGION="your_aws_region" # e.g., us-east-1
+    GROQ_API_KEY="your_groq_api_key"
     ```
     The script will load these variables. Alternatively, you can set them as system environment variables.
 
@@ -79,6 +81,7 @@ This will:
 ## Configuration
 
 -   **Model Selection:** Edit `ALL_MODEL_CONFIGS` in `src/config.py` to add, remove, or modify LLM configurations.
+-   **Prompt Templates:** Modify prompt templates in `src/prompts.py` to experiment with different phrasings for the LLMs.
 -   **Paths:** File and directory paths are also defined in `src/config.py` and are relative to the project root.
 
 ## TODO / Next Steps for Porting Code
