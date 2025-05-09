@@ -1,0 +1,13 @@
+python-dotenv
+openai
+Pillow
+reportlab
+scikit-learn
+numpy
+boto3
+google-generativeai
+matplotlib
+seaborn
+kaleido
+writerai 
+plotly
