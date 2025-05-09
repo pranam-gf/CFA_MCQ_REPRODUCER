@@ -20,20 +20,21 @@ def generate_prompt(entry: dict, model_type: str | None = None) -> str:
     vignette = entry.get('vignette', 'Vignette not available.')
     question_full_text = entry.get('question', 'Question not available.')
 
-    
-    prompt_instruction = "Respond with ONLY the single letter corresponding to the correct answer (e.g., A, B, or C). Do not include any other text, explanation, or formatting."
-
     if model_type == "gemini":
-        
-        prompt_instruction = """Answer in JSON format with the following structure:
-{
-  "answer": "LETTER",
-  "explanation": "Provide a brief explanation for the answer, even though it might be discarded later."
-}
+        return f"""Given the following context (vignette) and a multiple-choice question (which includes the question stem and all options), please analyze the information and select the best answer.
 
-Just provide the JSON without any other text."""
+Respond with ONLY the single uppercase letter of your chosen option (e.g., A, B, C). Do not include any other text, explanation, or punctuation.
 
-    return f"""
+Context (Vignette):
+{vignette}
+
+Question and Options:
+{question_full_text}
+
+Your chosen option letter:"""
+    else:
+        prompt_instruction = "Respond with ONLY the single letter corresponding to the correct answer (e.g., A, B, or C). Do not include any other text, explanation, or formatting."
+        return f"""
 Consider the following vignette:
 {vignette}
 
@@ -172,61 +173,40 @@ def get_llm_response(prompt: str, model_config: dict) -> dict | None:
                 return None
             genai.configure(api_key=config.GEMINI_API_KEY)
             
-            
-            
-            
-            valid_gemini_gen_config_keys = ["temperature", "top_p", "top_k", "max_output_tokens", "candidate_count"]
-            gemini_gen_params = {k: v for k, v in parameters.items() if k in valid_gemini_gen_config_keys}
-            
-            
-            if 'max_output_tokens' not in gemini_gen_params:
-                gemini_gen_params['max_output_tokens'] = 256 
-            
-            generation_config_gemini = genai.types.GenerationConfig(**gemini_gen_params)
-            
-            safety_settings = [
-                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
-            ]
-            
             gemini_model_instance = genai.GenerativeModel(model_id)
             
-            logger.info(f"Sending prompt to Gemini model {config_id} requesting JSON output.")
             logger.debug(f"Gemini prompt for {config_id}:\n{prompt}")
-
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-
             api_response = gemini_model_instance.generate_content(
-                prompt,
-                generation_config=generation_config_gemini,
-                safety_settings=safety_settings
-                
-                
+                prompt
             )
-
-            logger.debug(f"Gemini raw api_response object for {config_id}: {str(api_response)[:500]}...")
+            logger.debug(f"Gemini raw api_response object for {config_id}: {api_response}")
             if hasattr(api_response, 'prompt_feedback'):
                 logger.info(f"Gemini prompt_feedback for {config_id}: {api_response.prompt_feedback}")
             
+            if hasattr(api_response, 'candidates') and api_response.candidates:
+                logger.info(f"Gemini candidates object for {config_id}: {api_response.candidates}")
+                for i, cand in enumerate(api_response.candidates):
+                    finish_reason = getattr(cand, 'finish_reason', 'N/A')
+                    logger.info(f"Candidate {i} finish_reason: {finish_reason}")
+                    if hasattr(cand, 'content') and cand.content and hasattr(cand.content, 'parts'):
+                        logger.info(f"Candidate {i} content parts: {cand.content.parts}")
+                    else:
+                        logger.info(f"Candidate {i} has no content parts or content structure is different.")
+            else:
+                logger.info(f"No candidates found in Gemini response for {config_id}")
+
+
             response_text_for_error = "" 
-            if hasattr(api_response, 'text'): 
+            if hasattr(api_response, 'text') and api_response.text: 
                 response_text_for_error = api_response.text.strip()
             elif hasattr(api_response, 'candidates') and api_response.candidates:
                 try:
                     candidate = api_response.candidates[0]
                     if hasattr(candidate, 'content') and candidate.content and hasattr(candidate.content, 'parts') and candidate.content.parts:
-                        response_text_for_error = candidate.content.parts[0].text.strip()
+                        if hasattr(candidate.content.parts[0], 'text'):
+                             response_text_for_error = candidate.content.parts[0].text.strip()
+                        else:
+                            logger.warning(f"Gemini candidate {config_id} content part has no text attribute: {candidate.content.parts[0]}")
                     
                     if hasattr(candidate, 'finish_reason'):
                          logger.info(f"Gemini candidate finish_reason for {config_id}: {candidate.finish_reason}")
@@ -234,37 +214,17 @@ def get_llm_response(prompt: str, model_config: dict) -> dict | None:
                     logger.warning(f"Error parsing Gemini candidate for {config_id}: {e_parse_candidate}")
             
             if not response_text_for_error:
-                logger.warning(f"Gemini response text is empty for {config_id}.")
+                logger.warning(f"Gemini response text is empty for {config_id} after checking .text and .candidates[0].content.parts[0].text.")
                 
                 if hasattr(api_response, 'prompt_feedback') and api_response.prompt_feedback.block_reason:
-                    logger.error(f"Gemini content blocked for {config_id}. Reason: {api_response.prompt_feedback.block_reason}")
-                response_text_for_error = "{}" 
+                    logger.error(f"Gemini content blocked for {config_id}. Reason: {api_response.prompt_feedback.block_reason} - Details: {api_response.prompt_feedback.safety_ratings}")
+                elif hasattr(api_response, 'candidates') and api_response.candidates:
+                    for i, cand in enumerate(api_response.candidates):
+                        finish_reason = getattr(cand, 'finish_reason', 'N/A')
+                        if finish_reason != 'STOP' and finish_reason != 'MAX_TOKENS':
+                             logger.warning(f"Gemini candidate {i} for {config_id} had finish_reason: {finish_reason}, and no text was extracted.")
 
             logger.info(f"Gemini raw response text for {config_id}: {response_text_for_error[:200]}...")
-
-            try:
-                
-                cleaned_json_text = re.sub(r"^```json\s*|\s*```$", "", response_text_for_error, flags=re.MULTILINE | re.DOTALL)
-                parsed_json = json.loads(cleaned_json_text)
-                extracted_answer = parsed_json.get("answer")
-                if isinstance(extracted_answer, str):
-                    cleaned_answer = extracted_answer.strip().upper()
-                    
-                    if re.fullmatch(r"[A-D]", cleaned_answer): 
-                        response_text_for_error = cleaned_answer 
-                    else:
-                        logger.warning(f"Gemini JSON answer '{cleaned_answer}' is not a valid single letter A-D for {config_id}. Original JSON: {parsed_json}")
-                        response_text_for_error = "X" 
-                else:
-                    logger.warning(f"Gemini JSON response for {config_id} did not contain a valid 'answer' string: {parsed_json}")
-                    response_text_for_error = "X" 
-            except json.JSONDecodeError as e_json:
-                logger.error(f"Gemini response for {config_id} was not valid JSON: {e_json}. Response: {response_text_for_error[:200]}...")
-                response_text_for_error = "X" 
-            except Exception as e_gen_parse:
-                logger.error(f"Error parsing Gemini JSON or extracting answer for {config_id}: {e_gen_parse}. Response: {response_text_for_error[:200]}...")
-                response_text_for_error = "X"
-
 
             if hasattr(api_response, 'usage_metadata') and api_response.usage_metadata:
                 input_tokens = api_response.usage_metadata.prompt_token_count
@@ -357,11 +317,7 @@ def get_llm_response(prompt: str, model_config: dict) -> dict | None:
     cleaned_answer = "X"
 
     if model_type == "gemini": 
-        if response_text_for_error and re.fullmatch(r"[A-D]", response_text_for_error): 
-            cleaned_answer = response_text_for_error
-        else: 
-            logger.warning(f"Gemini final answer '{response_text_for_error}' is not A-D. Using 'X' for {config_id}")
-            cleaned_answer = "X"
+        pass 
     elif response_text_for_error: 
         
         
@@ -370,9 +326,9 @@ def get_llm_response(prompt: str, model_config: dict) -> dict | None:
             cleaned_answer = match.group(1).upper()
             logger.info(f"Extracted answer '{cleaned_answer}' for {config_id} from '{response_text_for_error[:50]}...'")
         else:
-            logger.warning(f"Could not extract single letter answer for {config_id} from '{response_text_for_error[:50]}...'. Marking as X.")
+            logger.error(f"Could not extract single letter answer for {config_id} from '{response_text_for_error[:50]}...'. Marking as X.")
     else:
-        logger.warning(f"Empty response_text_for_error for {config_id}. Marking as X.")
+        logger.error(f"Empty or no usable response text received for {config_id}. Marking as X.")
 
     
     
@@ -434,9 +390,12 @@ def process_questions_with_llm(data: list[dict], model_config_item: dict) -> lis
             if not correct_answer_str or "PLACEHOLDER" in correct_answer_str:
                 logger.warning(f"Q {i+1} ({config_id}): Correct answer missing/placeholder. Cannot evaluate correctness.")
                 is_correct = None
-            elif not llm_answer or llm_answer == "X": 
+            elif llm_answer == "X":
                 is_correct = False 
-                logger.warning(f"Q {i+1} ({config_id}): LLM did not provide a valid answer ('{llm_answer}'). Marked as incorrect.")
+                logger.info(f"Q {i+1} ({config_id}): LLM response parsed as 'X' (see previous error for details). Marked as incorrect.")
+            elif not llm_answer:
+                is_correct = False
+                logger.warning(f"Q {i+1} ({config_id}): LLM provided an empty or non-standard invalid answer ('{llm_answer}'). Marked as incorrect.")
             else:
                 is_correct = (llm_answer == correct_answer_str)
             

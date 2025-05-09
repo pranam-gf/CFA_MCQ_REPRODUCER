@@ -178,12 +178,12 @@ ALL_MODEL_CONFIGS = [
     {
     "config_id": "gemini-2.5-pro",
     "type": "gemini",
-    "model_id": "gemini-2.5-pro-preview-03-25",
+    "model_id": "gemini-2.5-pro-exp-03-25",
     "parameters": {
         "temperature": 0.1,
         "top_p": 0.9,
         "top_k": 50,
-        "max_output_tokens": 200
+        "max_output_tokens": 2048
     }
     },
     {
@@ -194,7 +194,7 @@ ALL_MODEL_CONFIGS = [
         "temperature": 0.1,
         "top_p": 0.9,
         "top_k": 50,
-        "max_output_tokens": 200
+        "max_output_tokens": 768
     }
     },
         {

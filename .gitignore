@@ -9,3 +9,4 @@ data
 results
 results/*
 .env
+run_gemini_cfa_eval.py

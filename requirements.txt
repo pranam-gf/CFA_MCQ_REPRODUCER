@@ -11,3 +11,4 @@ seaborn
 kaleido
 writerai 
 plotly
+questionary

@@ -13,6 +13,9 @@ from . import config
 from . import llm_clients
 from . import evaluation
 from . import plotting
+import sys
+import questionary
+
 
 logger = logging.getLogger(__name__)
 
@@ -40,42 +43,68 @@ def main():
         logger.error(f"Input data file not found: {config.FILLED_JSON_PATH}. Exiting.")
         return
 
-    
+    model_choices = [
+        {
+            "name": f"{m.get('config_id', m.get('model_id'))} ({m.get('type')})",
+            "value": m.get('config_id', m.get('model_id'))
+        }
+        for m in config.ALL_MODEL_CONFIGS
+    ]
+    model_choices.insert(0, {"name": "[Run All LLMs]", "value": "__ALL__"})
+
+    selected = questionary.checkbox(
+        "Select which LLM models to run (use spacebar to select, arrows to move, enter to confirm):",
+        choices=model_choices,
+        validate=lambda a: True if a else "Select at least one model."
+    ).ask()
+
+    if not selected:
+        print("No models selected. Exiting.")
+        return
+
+    if "__ALL__" in selected:
+        logger.info("Running all LLM models.")
+    else:
+        logger.info(f"Running selected models: {selected}")
+        config.ALL_MODEL_CONFIGS = [
+            m for m in config.ALL_MODEL_CONFIGS
+            if m.get('config_id', m.get('model_id')) in selected
+        ]
+
     all_model_results_summary = {}
     logger.info("Starting LLM processing and evaluation loop...")
 
     for model_config_item in config.ALL_MODEL_CONFIGS:
-        config_id = model_config_item.get("config_id", model_config_item.get("model_id"))
-        model_type = model_config_item.get("type")
-        logger.info(f"\n{'='*20} Processing Model: {config_id} ({model_type}) {'='*20}")
-
-        
+        config_id_loop = model_config_item.get("config_id", model_config_item.get("model_id"))
+        model_type_loop = model_config_item.get("type")
+        logger.info(f"\n{'='*20} Processing Model: {config_id_loop} ({model_type_loop}) {'='*20}")
+        data_for_this_run = processed_data
         credentials_ok = True
-        if (model_type == "bedrock" or model_type == "sagemaker") and \
+        if (model_type_loop == "bedrock" or model_type_loop == "sagemaker") and \
            (not config.AWS_ACCESS_KEY_ID or not config.AWS_SECRET_ACCESS_KEY):
-            logger.error(f"Skipping {config_id}: Missing AWS credentials.")
+            logger.error(f"Skipping {config_id_loop}: Missing AWS credentials.")
             credentials_ok = False
-        elif model_type == "openai" and not config.OPENAI_API_KEY:
-            logger.error(f"Skipping {config_id}: Missing OpenAI API key.")
+        elif model_type_loop == "openai" and not config.OPENAI_API_KEY:
+            logger.error(f"Skipping {config_id_loop}: Missing OpenAI API key.")
             credentials_ok = False
-        elif model_type == "gemini" and not config.GEMINI_API_KEY:
-            logger.error(f"Skipping {config_id}: Missing Gemini API key.")
+        elif model_type_loop == "gemini" and not config.GEMINI_API_KEY:
+            logger.error(f"Skipping {config_id_loop}: Missing Gemini API key.")
             credentials_ok = False
-        elif model_type == "xai" and not config.XAI_API_KEY:
-            logger.error(f"Skipping {config_id}: Missing xAI API key.")
+        elif model_type_loop == "xai" and not config.XAI_API_KEY:
+            logger.error(f"Skipping {config_id_loop}: Missing xAI API key.")
             credentials_ok = False
-        elif model_type == "writer" and not config.WRITER_API_KEY:
-            logger.error(f"Skipping {config_id}: Missing Writer API key.")
+        elif model_type_loop == "writer" and not config.WRITER_API_KEY:
+            logger.error(f"Skipping {config_id_loop}: Missing Writer API key.")
             credentials_ok = False
         
         if not credentials_ok:
-            all_model_results_summary[config_id] = {"error": "Missing credentials", "num_processed": 0}
+            all_model_results_summary[config_id_loop] = {"error": "Missing credentials", "num_processed": 0}
             continue
 
         try:
-            logger.info(f"Processing {len(processed_data)} questions with {config_id}...")
+            logger.info(f"Processing {len(data_for_this_run)} questions with {config_id_loop}...")
             
-            llm_run_results_data = llm_clients.process_questions_with_llm(processed_data, model_config_item)
+            llm_run_results_data = llm_clients.process_questions_with_llm(data_for_this_run, model_config_item)
 
             avg_time = None
             total_in_tokens = 0
@@ -96,19 +125,19 @@ def main():
                 num_results_for_len = len(llm_run_results_data)
                 avg_answer_len = np.mean([r.get('answer_length', 0) for r in llm_run_results_data]) if num_results_for_len > 0 else 0.0
             
-            model_response_filename = config.RESULTS_DIR / f"response_data_{config_id}.json"
+            model_response_filename = config.RESULTS_DIR / f"response_data_{config_id_loop}.json"
             try:
                 with open(model_response_filename, 'w', encoding='utf-8') as f:
                     json.dump(llm_run_results_data, f, indent=4)
-                logger.info(f"LLM responses for {config_id} saved to {model_response_filename}")
+                logger.info(f"LLM responses for {config_id_loop} saved to {model_response_filename}")
             except Exception as e_save:
-                logger.error(f"Failed to save LLM results for {config_id} to {model_response_filename}: {e_save}", exc_info=True)
+                logger.error(f"Failed to save LLM results for {config_id_loop} to {model_response_filename}: {e_save}", exc_info=True)
 
             if llm_run_results_data:
-                logger.info(f"Performing final evaluation on {config_id} results...")                
+                logger.info(f"Performing final evaluation on {config_id_loop} results...")                
                 classification_metrics = evaluation.evaluate_classification(llm_run_results_data)
                 
-                all_model_results_summary[config_id] = {
+                all_model_results_summary[config_id_loop] = {
                     "metrics": classification_metrics,
                     "avg_response_time": avg_time,
                     "total_input_tokens": total_in_tokens,
@@ -117,15 +146,15 @@ def main():
                     "num_processed": len(llm_run_results_data),
                     "results_file": str(model_response_filename)
                 }
-                logger.info(f"Evaluation summary for {config_id}: Accuracy: {classification_metrics.get('accuracy'):.4f}")
+                logger.info(f"Evaluation summary for {config_id_loop}: Accuracy: {classification_metrics.get('accuracy'):.4f}")
             else:
-                logger.warning(f"No results generated by {config_id}. Skipping evaluation.")
-                all_model_results_summary[config_id] = {
+                logger.warning(f"No results generated by {config_id_loop}. Skipping evaluation.")
+                all_model_results_summary[config_id_loop] = {
                     "error": "No results generated", "num_processed": 0
                 }
         except Exception as model_proc_err:
-            logger.error(f"An error occurred while processing model {config_id}: {model_proc_err}", exc_info=True)
-            all_model_results_summary[config_id] = {"error": str(model_proc_err), "num_processed": 0}
+            logger.error(f"An error occurred while processing model {config_id_loop}: {model_proc_err}", exc_info=True)
+            all_model_results_summary[config_id_loop] = {"error": str(model_proc_err), "num_processed": 0}
             
 
     
