@@ -104,9 +104,9 @@ The program now includes several UI enhancements:
    - ℹ Info messages in blue
    - ⚠ Warning messages in yellow
 
-4. **Interactive Model Selection**: Choose which LLMs to run using a checkbox interface:
+4. **Real-time Processing**: View the progress as the selected LLMs process the questions:
 
-![alt text](img/llm_selection.png)
+![Real-time LLM processing progress](img/exec_llm.png)
 
 5. **Formatted Results Summary**: Displays a clear table of results at the end of processing.
 

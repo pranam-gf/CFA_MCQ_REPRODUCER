@@ -208,12 +208,12 @@ ALL_MODEL_CONFIGS = [
         }
     },
     {
-        "config_id": "deepseek-via-groq",
+        "config_id": "deepseek-r1-distill-llama-70b-via-groq",
         "type": "groq",
         "model_id": "deepseek-r1-distill-llama-70b",
         "parameters": {
             "temperature": 0.6,
-            "max_tokens": 2000,
+            "max_tokens": 4000,
             "top_p": 0.9
         }
     }

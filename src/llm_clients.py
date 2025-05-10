@@ -11,6 +11,7 @@ import boto3
 from openai import OpenAI
 import google.generativeai as genai
 from writerai import Writer
+from groq import Groq
 
 from . import config
 from . import prompts
@@ -322,7 +323,53 @@ def get_llm_response(prompt: str, model_config: dict) -> dict | None:
 
     cleaned_answer = "X"
 
-    if model_type == "gemini":
+    if model_type == "groq":
+        processed_text_for_groq = response_text_for_error.strip()
+        think_start_tag = "<think>"
+        think_end_tag = "</think>"
+        content_after_think = processed_text_for_groq
+        groq_answer_found = False
+
+        if think_start_tag in processed_text_for_groq:
+            if think_end_tag in processed_text_for_groq:
+                parts = processed_text_for_groq.split(think_end_tag, 1)
+                if len(parts) > 1:
+                    content_after_think = parts[1].strip()
+                    logger.info(f"Groq ({config_id}): Stripped <think> block. Text to parse: '{content_after_think[:150]}...'")
+                else:
+                    logger.warning(f"Groq ({config_id}): Found </think> tag at the end of the response. No content follows. Original: '{response_text_for_error[:100]}...'")
+                    content_after_think = ""
+            else:
+                logger.warning(f"Groq ({config_id}): Found opening <think> tag without a closing </think> tag. Response might be incomplete or just a thought. Will try to parse full response. Original: '{response_text_for_error[:100]}...'")
+        
+        if not content_after_think:
+            logger.warning(f"Groq ({config_id}): Response is empty after attempting to process <think> block. Original raw: '{response_text_for_error[:100]}...'")
+        else:
+            lines = content_after_think.splitlines()
+            for line in lines:
+                stripped_line = line.strip()
+                if not stripped_line:
+                    continue
+
+                match1 = re.search(r"\b(?:Answer|Option|Choice|The\s+correct\s+answer)\s*(?:is)?\s*[:\-*]*\s*(?:[\*_]{0,2}([A-C])[\*_]{0,2})\b", stripped_line, re.IGNORECASE)
+                if match1:
+                    cleaned_answer = match1.group(1).upper()
+                    logger.info(f"Groq ({config_id}): Extracted answer '{cleaned_answer}' using keyword pattern from line: '{stripped_line[:70]}...'")
+                    groq_answer_found = True
+                    break 
+                
+                if not groq_answer_found:
+                    match2 = re.match(r"^\s*([A-C])\b", stripped_line, re.IGNORECASE)
+                    if match2:
+                        cleaned_answer = match2.group(1).upper()
+                        logger.info(f"Groq ({config_id}): Extracted answer '{cleaned_answer}' using start-of-line pattern from line: '{stripped_line[:70]}...'")
+                        groq_answer_found = True
+                        break
+            
+            if not groq_answer_found:
+                logger.warning(f"Groq ({config_id}): Could not extract a single letter answer (A, B, C) from lines of: '{content_after_think[:150]}...'. Marking as X.")
+
+    elif model_type == "gemini":
         pass
     elif response_text_for_error:
 
