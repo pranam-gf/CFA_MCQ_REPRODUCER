@@ -31,9 +31,6 @@ def _get_tokens_from_headers(headers: dict, input_key: str, output_key: str) -> 
     output_t = None
     if output_val_str and output_val_str.isdigit():
         output_t = int(output_val_str)
-        
-    # Only return counts if both are valid and positive or zero. 
-    # If one is valid and the other is not, it's an incomplete pair.
     if input_t is not None and output_t is not None:
         return input_t, output_t
     return None, None
@@ -95,8 +92,6 @@ def get_llm_response(prompt: str, model_config: dict) -> dict | None:
 
             if "anthropic" in model_id:
                 messages = [{"role": "user", "content": prompt}]
-
-
                 body = json.dumps({
                     "messages": messages,
                     "anthropic_version": parameters.get("anthropic_version", "bedrock-2023-05-31"),
@@ -108,8 +103,6 @@ def get_llm_response(prompt: str, model_config: dict) -> dict | None:
                 )
                 response_body = json.loads(api_response.get('body').read())
                 response_text_for_error = response_body.get('content', [{}])[0].get('text', '')
-                
-                # Try headers first for Anthropic
                 api_headers = api_response.get('ResponseMetadata', {}).get('HTTPHeaders', {})
                 input_tokens, output_tokens = _get_tokens_from_headers(
                     api_headers,
@@ -136,7 +129,7 @@ def get_llm_response(prompt: str, model_config: dict) -> dict | None:
 
                 if "mistral" in model_id:
                     response_text_for_error = response_body.get('outputs', [{}])[0].get('text', '')
-                    # For Mistral, try headers first, then body
+                    
                     input_tokens, output_tokens = _get_tokens_from_headers(
                         api_headers,
                         'x-amzn-bedrock-input-token-count',
@@ -145,9 +138,9 @@ def get_llm_response(prompt: str, model_config: dict) -> dict | None:
                     if input_tokens is None or output_tokens is None:
                         logger.debug(f"Token counts not found/incomplete in headers for Bedrock Mistral {config_id}. Trying response body.")
                         usage_from_body = response_body.get('usage', {})
-                        input_tokens = usage_from_body.get('prompt_token_count') # Mistral might use prompt_token_count in body
-                        output_tokens = usage_from_body.get('completion_token_count') # and completion_token_count
-                        if input_tokens is None or output_tokens is None: # Fallback to other common names
+                        input_tokens = usage_from_body.get('prompt_token_count') 
+                        output_tokens = usage_from_body.get('completion_token_count') 
+                        if input_tokens is None or output_tokens is None: 
                             input_tokens = usage_from_body.get('input_tokens')
                             output_tokens = usage_from_body.get('output_tokens')
                         
@@ -156,9 +149,9 @@ def get_llm_response(prompt: str, model_config: dict) -> dict | None:
                     else:
                         logger.debug(f"Retrieved token counts from headers for Bedrock Mistral {config_id}.")
 
-                elif "meta" in model_id: # Llama
+                elif "meta" in model_id: 
                     response_text_for_error = response_body.get('generation', '')
-                     # For Meta/Llama, try headers first, then body
+                     
                     input_tokens, output_tokens = _get_tokens_from_headers(
                         api_headers,
                         'x-amzn-bedrock-input-token-count',
@@ -166,10 +159,10 @@ def get_llm_response(prompt: str, model_config: dict) -> dict | None:
                     )
                     if input_tokens is None or output_tokens is None:
                         logger.debug(f"Token counts not found/incomplete in headers for Bedrock Meta {config_id}. Trying response body.")
-                        # Llama on Bedrock (invoke_model) often includes these in the body directly
+                        
                         input_tokens = response_body.get('prompt_token_count')
-                        output_tokens = response_body.get('generation_token_count') # Llama uses generation_token_count
-                        if input_tokens is None or output_tokens is None: # Fallback to other common names if primary ones missing
+                        output_tokens = response_body.get('generation_token_count') 
+                        if input_tokens is None or output_tokens is None: 
                             usage_from_body = response_body.get('usage', {})
                             input_tokens = usage_from_body.get('input_tokens')
                             output_tokens = usage_from_body.get('output_tokens')
@@ -179,8 +172,8 @@ def get_llm_response(prompt: str, model_config: dict) -> dict | None:
                     else:
                         logger.debug(f"Retrieved token counts from headers for Bedrock Meta {config_id}.")
                 
-                # Removed the generic estimation block that was here previously for Mistral/Meta.
-                # Each model type (Anthropic, Mistral, Meta) now handles its own token logic or sets to None.
+                
+                
 
             else:
                 logger.error(f"Unsupported Bedrock model provider for {config_id}")
@@ -200,7 +193,7 @@ def get_llm_response(prompt: str, model_config: dict) -> dict | None:
             if hasattr(api_response, 'usage') and api_response.usage:
                 input_tokens = api_response.usage.prompt_tokens
                 output_tokens = api_response.usage.completion_tokens
-            else: # Ensure tokens are None if not found
+            else: 
                 logger.warning(f"Token usage data not found in OpenAI response for {config_id}. Setting to None.")
                 input_tokens = None
                 output_tokens = None
@@ -222,7 +215,7 @@ def get_llm_response(prompt: str, model_config: dict) -> dict | None:
             if hasattr(api_response, 'usage') and api_response.usage:
                 input_tokens = api_response.usage.prompt_tokens
                 output_tokens = api_response.usage.completion_tokens
-            else: # Ensure tokens are None if not found
+            else: 
                 logger.warning(f"Token usage data not found in xAI response for {config_id}. Setting to None.")
                 input_tokens = None
                 output_tokens = None
@@ -289,9 +282,9 @@ def get_llm_response(prompt: str, model_config: dict) -> dict | None:
             if hasattr(api_response, 'usage_metadata') and api_response.usage_metadata:
                 input_tokens = api_response.usage_metadata.prompt_token_count
                 output_tokens = api_response.usage_metadata.candidates_token_count
-                if output_tokens is None and hasattr(api_response.usage_metadata, 'total_token_count'): # Calculate if candidates_token_count is missing
+                if output_tokens is None and hasattr(api_response.usage_metadata, 'total_token_count'): 
                     output_tokens = api_response.usage_metadata.total_token_count - (input_tokens or 0)
-            elif input_tokens is None: # This was an estimation block, ensure it's None
+            elif input_tokens is None: 
                 logger.warning(f"Gemini token count not found via usage_metadata for {config_id}. Setting to None.")
                 input_tokens = None
                 output_tokens = None
@@ -360,10 +353,6 @@ def get_llm_response(prompt: str, model_config: dict) -> dict | None:
                 Body=body
             )
             response_body = json.loads(api_response['Body'].read().decode())
-
-
-
-
             if isinstance(response_body, list) and len(response_body) > 0 and isinstance(response_body[0], dict):
                 if 'generated_text' in response_body[0]:
                     response_text_for_error = response_body[0]['generated_text']
@@ -381,9 +370,9 @@ def get_llm_response(prompt: str, model_config: dict) -> dict | None:
             else:
                 response_text_for_error = str(response_body)
 
-            # logger.warning(f"SageMaker token count not directly available for {config_id}, estimating.")
-            # input_tokens = len(prompt.split()) * 1.3
-            # output_tokens = len(response_text_for_error.split()) * 1.3
+            
+            
+            
             input_tokens = None
             output_tokens = None
             logger.error(
@@ -402,9 +391,6 @@ def get_llm_response(prompt: str, model_config: dict) -> dict | None:
         elapsed_time = time.time() - start_time
         logger.error(f"API call to {config_id} failed after {elapsed_time:.2f}s: {e}. Raw response snippet: {response_text_for_error[:100]}...")
         return None
-
-
-
     cleaned_answer = "X"
 
     if model_type == "groq":
@@ -466,9 +452,6 @@ def get_llm_response(prompt: str, model_config: dict) -> dict | None:
             logger.error(f"Could not extract single letter answer for {config_id} from '{response_text_for_error[:50]}...'. Marking as X.")
     else:
         logger.error(f"Empty or no usable response text received for {config_id}. Marking as X.")
-
-
-
     response_json = {
         "answer": cleaned_answer,
         "explanation": ""
