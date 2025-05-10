@@ -108,7 +108,9 @@ The program now includes several UI enhancements:
 
 ![Real-time LLM processing progress](img/exec_llm.png)
 
-5. **Formatted Results Summary**: Displays a clear table of results at the end of processing.
+5. **Formatted Results Summary**: Displays a clear table of results at the end of processing:
+
+![Formatted results summary table](img/llm_results.png)
 
 ## Configuration
 
