@@ -52,7 +52,7 @@ RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 CHARTS_DIR.mkdir(parents=True, exist_ok=True)
 
 FILLED_JSON_PATH = DATA_DIR / "updated_data.json" 
-# ALL_MODEL_CONFIGS = [ ... ] # This list will be removed
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -68,17 +68,16 @@ logger = logging.getLogger(__name__)
 logger.info("Configuration loaded.")
 if not OPENAI_API_KEY:
     logger.warning("OPENAI_API_KEY not found. OpenAI models will fail.")
-# Update these checks if they rely on ALL_MODEL_CONFIGS being defined here
-# For now, assuming these checks might be better placed in main.py when configs are loaded.
-# if (any(m.get('type') == 'bedrock' for m in ALL_MODEL_CONFIGS) or \
-#     any(m.get('type') == 'sagemaker' for m in ALL_MODEL_CONFIGS)) and \
-#    (not AWS_ACCESS_KEY_ID or not AWS_SECRET_ACCESS_KEY):
-#     logger.warning("AWS credentials not found. Bedrock/SageMaker models will fail.")
-# if any(m.get('type') == 'gemini' for m in ALL_MODEL_CONFIGS) and not GEMINI_API_KEY:
-#     logger.warning("GEMINI_API_KEY not found. Gemini models will fail.")
-# if any(m.get('type') == 'xai' for m in ALL_MODEL_CONFIGS) and not XAI_API_KEY:
-#     logger.warning("XAI_API_KEY not found. Grok models will fail.")
-# if any(m.get('type') == 'writer' for m in ALL_MODEL_CONFIGS) and not WRITER_API_KEY: 
-#     logger.warning("WRITER_API_KEY not found. Writer models will fail.")
-# if any(m.get('type') == 'groq' for m in ALL_MODEL_CONFIGS) and not GROQ_API_KEY:
-#     logger.warning("GROQ_API_KEY not found. Groq models will fail.") 
+
+
+
+
+
+
+
+
+
+
+
+
+
