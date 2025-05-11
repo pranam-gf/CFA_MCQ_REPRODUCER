@@ -5,17 +5,13 @@ import time
 import json
 import logging
 import re
-import sys
-import threading
 import boto3
-from openai import OpenAI
+from openai import OpenAI, APIError, RateLimitError, APIConnectionError
 import google.generativeai as genai
 from writerai import Writer
 from groq import Groq
 
 from . import config
-from . import prompts
-from . import ui_utils
 
 logger = logging.getLogger(__name__)
 
@@ -35,41 +31,37 @@ def _get_tokens_from_headers(headers: dict, input_key: str, output_key: str) -> 
         return input_t, output_t
     return None, None
 
-def generate_prompt(entry: dict, model_type: str | None = None) -> str:
-    """Generates the prompt for the LLM."""
-    vignette = entry.get('vignette', 'Vignette not available.')
-    question_full_text = entry.get('question', 'Question not available.')
-
-    if model_type == "gemini":
-        return prompts.GEMINI_PROMPT_TEMPLATE.format(vignette=vignette, question_full_text=question_full_text)
-    else:
-        return prompts.DEFAULT_PROMPT_TEMPLATE.format(vignette=vignette, question_full_text=question_full_text)
-
-def get_llm_response(prompt: str, model_config: dict) -> dict | None:
+def get_llm_response(prompt: str, model_config: dict, is_json_response_expected: bool = False) -> dict | None:
     """
-    Sends a prompt to the specified LLM API and parses the single letter response.
-    Also measures response time and attempts to extract token counts.
+    Sends a prompt to the specified LLM API and parses the response.
+    Measures response time and attempts to extract token counts.
 
     Args:
         prompt: The prompt string to send to the LLM.
         model_config: Dictionary containing model type, ID, parameters.
+        is_json_response_expected: If True, attempts to parse the entire response as JSON.
+                                   If False (default), extracts a single letter A,B,C,D.
 
     Returns:
-        A dictionary containing {'response_json': {'answer': <letter>, 'explanation': ''},
+        A dictionary containing {'response_content': <parsed_response_or_letter>,
+                                'raw_response_text': <full_response_text>,
                                 'response_time', 'input_tokens', 'output_tokens'},
-        or None if the API call failed or response parsing failed.
+        or None if the API call failed or response parsing failed critically.
+        'response_content' will be a dict if is_json_response_expected is True and parsing succeeds,
+        otherwise it will be the extracted letter or "X" on failure.
     """
     model_type = model_config.get("type")
     model_id = model_config.get("model_id")
     parameters = model_config.get("parameters", {}).copy()
     config_id = model_config.get("config_id", model_id)
 
+    if model_type == "openai" and is_json_response_expected and parameters.get("response_format", {}).get("type") == "json_object":
+        if "json" not in prompt.lower():
+             logger.warning(f"OpenAI model {config_id} called with response_format=json_object, but 'json' not found in prompt. This might lead to API errors.")
+    elif model_type == "openai":
+        parameters.pop('response_format', None)
 
-    parameters.pop('response_format', None)
-
-
-
-    logger.info(f"Sending prompt to {model_type} model: {config_id} (requesting single letter answer)")
+    logger.info(f"Sending prompt to {model_type} model: {config_id} (JSON Expected: {is_json_response_expected})")
     start_time = time.time()
     input_tokens = None
     output_tokens = None
@@ -80,7 +72,7 @@ def get_llm_response(prompt: str, model_config: dict) -> dict | None:
         if model_type == "bedrock":
             if not config.AWS_ACCESS_KEY_ID or not config.AWS_SECRET_ACCESS_KEY:
                 logger.error(f"Missing AWS credentials for Bedrock model {config_id}.")
-                return None
+                return {"error_message": "Missing AWS credentials", "response_time": 0}
             bedrock_client = boto3.client(
                 service_name='bedrock-runtime',
                 region_name=config.AWS_REGION,
@@ -92,11 +84,14 @@ def get_llm_response(prompt: str, model_config: dict) -> dict | None:
 
             if "anthropic" in model_id:
                 messages = [{"role": "user", "content": prompt}]
-                body = json.dumps({
+                body_params = {
                     "messages": messages,
                     "anthropic_version": parameters.get("anthropic_version", "bedrock-2023-05-31"),
                     **{k: v for k, v in parameters.items() if k not in ["anthropic_version"]}
-                })
+                }
+                body_params.pop("response_format", None)
+                body = json.dumps(body_params)
+
                 model_identifier = model_config.get("inference_profile_arn") if model_config.get("use_inference_profile", False) else model_id
                 api_response = bedrock_client.invoke_model(
                     body=body, modelId=model_identifier, accept=accept, contentType=contentType
@@ -120,7 +115,10 @@ def get_llm_response(prompt: str, model_config: dict) -> dict | None:
                     logger.debug(f"Retrieved token counts from headers for Bedrock Anthropic {config_id}.")
 
             elif "mistral" in model_id or "meta" in model_id:
-                body = json.dumps({"prompt": prompt, **parameters})
+                bedrock_params = parameters.copy()
+                bedrock_params.pop("response_format", None)
+                
+                body = json.dumps({"prompt": prompt, **bedrock_params})
                 api_response = bedrock_client.invoke_model(
                     body=body, modelId=model_id, accept=accept, contentType=contentType
                 )
@@ -129,7 +127,6 @@ def get_llm_response(prompt: str, model_config: dict) -> dict | None:
 
                 if "mistral" in model_id:
                     response_text_for_error = response_body.get('outputs', [{}])[0].get('text', '')
-                    
                     input_tokens, output_tokens = _get_tokens_from_headers(
                         api_headers,
                         'x-amzn-bedrock-input-token-count',
@@ -143,15 +140,13 @@ def get_llm_response(prompt: str, model_config: dict) -> dict | None:
                         if input_tokens is None or output_tokens is None: 
                             input_tokens = usage_from_body.get('input_tokens')
                             output_tokens = usage_from_body.get('output_tokens')
-                        
                         if input_tokens is None or output_tokens is None:
                              logger.warning(f"Token counts not found in body for Bedrock Mistral {config_id}. Setting to None.")
                     else:
                         logger.debug(f"Retrieved token counts from headers for Bedrock Mistral {config_id}.")
 
-                elif "meta" in model_id: 
+                elif "meta" in model_id:
                     response_text_for_error = response_body.get('generation', '')
-                     
                     input_tokens, output_tokens = _get_tokens_from_headers(
                         api_headers,
                         'x-amzn-bedrock-input-token-count',
@@ -159,399 +154,311 @@ def get_llm_response(prompt: str, model_config: dict) -> dict | None:
                     )
                     if input_tokens is None or output_tokens is None:
                         logger.debug(f"Token counts not found/incomplete in headers for Bedrock Meta {config_id}. Trying response body.")
-                        
                         input_tokens = response_body.get('prompt_token_count')
                         output_tokens = response_body.get('generation_token_count') 
                         if input_tokens is None or output_tokens is None: 
                             usage_from_body = response_body.get('usage', {})
                             input_tokens = usage_from_body.get('input_tokens')
                             output_tokens = usage_from_body.get('output_tokens')
-
                         if input_tokens is None or output_tokens is None:
                             logger.warning(f"Token counts not found in body for Bedrock Meta {config_id}. Setting to None.")
                     else:
                         logger.debug(f"Retrieved token counts from headers for Bedrock Meta {config_id}.")
-                
-                
-                
-
             else:
                 logger.error(f"Unsupported Bedrock model provider for {config_id}")
-                return None
+                return {"error_message": f"Unsupported Bedrock model: {config_id}", "response_time": 0}
 
         elif model_type == "openai":
             if not config.OPENAI_API_KEY:
                 logger.error(f"Missing OpenAI API key for model {config_id}.")
-                return None
+                return {"error_message": "Missing OpenAI API key", "response_time": 0}
             openai_client = OpenAI(api_key=config.OPENAI_API_KEY)
+            
+            openai_params = parameters.copy()
+            if is_json_response_expected and openai_params.get("response_format", {}).get("type") == "json_object":
+                 pass
+            else:
+                openai_params.pop('response_format', None)
+
             api_response = openai_client.chat.completions.create(
                 model=model_id,
                 messages=[{"role": "user", "content": prompt}],
-                **parameters
+                **openai_params
             )
-            response_text_for_error = api_response.choices[0].message.content.strip()
+            response_text_for_error = api_response.choices[0].message.content.strip() if api_response.choices and api_response.choices[0].message else ""
             if hasattr(api_response, 'usage') and api_response.usage:
                 input_tokens = api_response.usage.prompt_tokens
                 output_tokens = api_response.usage.completion_tokens
             else: 
                 logger.warning(f"Token usage data not found in OpenAI response for {config_id}. Setting to None.")
-                input_tokens = None
-                output_tokens = None
-
+        
         elif model_type == "xai":
             if not config.XAI_API_KEY:
                 logger.error(f"Missing xAI API key for model {config_id}.")
-                return None
+                return {"error_message": "Missing xAI API key", "response_time": 0}
             xai_client = OpenAI(
                 api_key=config.XAI_API_KEY,
                 base_url="https://api.x.ai/v1",
             )
+            xai_params = parameters.copy()
+            xai_params.pop('response_format', None)
             api_response = xai_client.chat.completions.create(
                 model=model_id,
                 messages=[{"role": "user", "content": prompt}],
-                **parameters
+                **xai_params
             )
-            response_text_for_error = api_response.choices[0].message.content.strip()
+            response_text_for_error = api_response.choices[0].message.content.strip() if api_response.choices and api_response.choices[0].message else ""
             if hasattr(api_response, 'usage') and api_response.usage:
                 input_tokens = api_response.usage.prompt_tokens
                 output_tokens = api_response.usage.completion_tokens
             else: 
                 logger.warning(f"Token usage data not found in xAI response for {config_id}. Setting to None.")
-                input_tokens = None
-                output_tokens = None
 
         elif model_type == "gemini":
             if not config.GEMINI_API_KEY:
                 logger.error(f"Missing Gemini API key for model {config_id}.")
-                return None
+                return {"error_message": "Missing Gemini API key", "response_time": 0}
             genai.configure(api_key=config.GEMINI_API_KEY)
-
             gemini_model_instance = genai.GenerativeModel(model_id)
-
-            logger.debug(f"Gemini prompt for {config_id}:\n{prompt}")
+            
+            gemini_params = parameters.copy()
+            gen_config_params = {k: v for k,v in gemini_params.items() if k in ["temperature", "top_p", "top_k", "max_output_tokens"]}
+            generation_config = genai.types.GenerationConfig(**gen_config_params)
+            
+            logger.debug(f"Gemini prompt for {config_id}:\n{prompt[:200]}...")
             api_response = gemini_model_instance.generate_content(
-                prompt
+                prompt,
+                generation_config=generation_config
             )
             logger.debug(f"Gemini raw api_response object for {config_id}: {api_response}")
-            if hasattr(api_response, 'prompt_feedback'):
-                logger.info(f"Gemini prompt_feedback for {config_id}: {api_response.prompt_feedback}")
-
-            if hasattr(api_response, 'candidates') and api_response.candidates:
-                logger.info(f"Gemini candidates object for {config_id}: {api_response.candidates}")
-                for i, cand in enumerate(api_response.candidates):
-                    finish_reason = getattr(cand, 'finish_reason', 'N/A')
-                    logger.info(f"Candidate {i} finish_reason: {finish_reason}")
-                    if hasattr(cand, 'content') and cand.content and hasattr(cand.content, 'parts'):
-                        logger.info(f"Candidate {i} content parts: {cand.content.parts}")
-                    else:
-                        logger.info(f"Candidate {i} has no content parts or content structure is different.")
-            else:
-                logger.info(f"No candidates found in Gemini response for {config_id}")
-
-
+            
             response_text_for_error = ""
             if hasattr(api_response, 'text') and api_response.text:
                 response_text_for_error = api_response.text.strip()
+                logger.debug(f"Extracted response via api_response.text for {config_id}")
             elif hasattr(api_response, 'candidates') and api_response.candidates:
                 try:
                     candidate = api_response.candidates[0]
-                    if hasattr(candidate, 'content') and candidate.content and hasattr(candidate.content, 'parts') and candidate.content.parts:
-                        if hasattr(candidate.content.parts[0], 'text'):
-                             response_text_for_error = candidate.content.parts[0].text.strip()
-                        else:
-                            logger.warning(f"Gemini candidate {config_id} content part has no text attribute: {candidate.content.parts[0]}")
-
+                    logger.debug(f"Examining candidate for {config_id}: {candidate}")
+                    
+                    if hasattr(candidate, 'content') and candidate.content:
+                        logger.debug(f"Candidate content for {config_id}: {candidate.content}")
+                        
+                        if hasattr(candidate.content, 'parts') and candidate.content.parts:
+                            logger.debug(f"Content parts for {config_id}: {candidate.content.parts}")
+                            
+                            if hasattr(candidate.content.parts[0], 'text'):
+                                response_text_for_error = candidate.content.parts[0].text.strip()
+                                logger.debug(f"Successfully extracted text from parts for {config_id}: {response_text_for_error[:50]}...")
+                            else:
+                                logger.warning(f"Gemini candidate {config_id} content part has no text attribute: {candidate.content.parts[0]}")
+                                
+                                response_text_for_error = str(candidate.content.parts[0])
+                                logger.debug(f"Using string representation instead: {response_text_for_error[:50]}...")
+                    
                     if hasattr(candidate, 'finish_reason'):
                          logger.info(f"Gemini candidate finish_reason for {config_id}: {candidate.finish_reason}")
                 except Exception as e_parse_candidate:
                     logger.warning(f"Error parsing Gemini candidate for {config_id}: {e_parse_candidate}")
-
+                    logger.debug("Full response object structure:", exc_info=True)
+            
             if not response_text_for_error:
-                logger.warning(f"Gemini response text is empty for {config_id} after checking .text and .candidates[0].content.parts[0].text.")
-
-                if hasattr(api_response, 'prompt_feedback') and api_response.prompt_feedback.block_reason:
-                    logger.error(f"Gemini content blocked for {config_id}. Reason: {api_response.prompt_feedback.block_reason} - Details: {api_response.prompt_feedback.safety_ratings}")
-                elif hasattr(api_response, 'candidates') and api_response.candidates:
-                    for i, cand in enumerate(api_response.candidates):
-                        finish_reason = getattr(cand, 'finish_reason', 'N/A')
-                        if finish_reason != 'STOP' and finish_reason != 'MAX_TOKENS':
-                             logger.warning(f"Gemini candidate {i} for {config_id} had finish_reason: {finish_reason}, and no text was extracted.")
+                
+                try:
+                    response_text_for_error = str(api_response)
+                    logger.warning(f"Using full object string representation for {config_id} as text was empty: {response_text_for_error[:100]}...")
+                except:
+                    logger.warning(f"Gemini response text is empty for {config_id} and string representation failed.")
+                
+                if hasattr(api_response, 'prompt_feedback') and api_response.prompt_feedback:
+                    block_reason = getattr(api_response.prompt_feedback, 'block_reason', None)
+                    if block_reason:
+                        logger.error(f"Gemini content blocked for {config_id}. Reason: {block_reason} - Details: {api_response.prompt_feedback.safety_ratings}")
+                        return {"error_message": f"Gemini content blocked: {block_reason}", 
+                                "response_time": time.time() - start_time,
+                                "details": api_response.prompt_feedback.safety_ratings}
 
             logger.info(f"Gemini raw response text for {config_id}: {response_text_for_error[:200]}...")
-
             if hasattr(api_response, 'usage_metadata') and api_response.usage_metadata:
                 input_tokens = api_response.usage_metadata.prompt_token_count
                 output_tokens = api_response.usage_metadata.candidates_token_count
                 if output_tokens is None and hasattr(api_response.usage_metadata, 'total_token_count'): 
                     output_tokens = api_response.usage_metadata.total_token_count - (input_tokens or 0)
-            elif input_tokens is None: 
+            else: 
                 logger.warning(f"Gemini token count not found via usage_metadata for {config_id}. Setting to None.")
-                input_tokens = None
-                output_tokens = None
 
         elif model_type == "writer":
             if not config.WRITER_API_KEY:
                 logger.error(f"Missing Writer API key for model {config_id}.")
-                return None
+                return {"error_message": "Missing Writer API key", "response_time": 0}
             writer_client = Writer(api_key=config.WRITER_API_KEY)
             writer_params = {k: v for k, v in parameters.items() if k in ["temperature", "max_tokens"]}
+            writer_params.pop('response_format', None)
             api_response = writer_client.chat.chat(
                 messages=[{"role": "user", "content": prompt}],
                 model=model_id,
                 **writer_params
             )
-            response_text_for_error = api_response.choices[0].message.content.strip()
+            response_text_for_error = api_response.choices[0].message.content.strip() if api_response.choices and api_response.choices[0].message else ""
             if hasattr(api_response, 'usage') and api_response.usage:
                 input_tokens = api_response.usage.prompt_tokens
                 output_tokens = api_response.usage.completion_tokens
             else:
-                logger.warning(f"Writer token count not found in usage object for {config_id}. Setting to None.")
-                input_tokens = None
-                output_tokens = None
-
+                logger.warning(f"Writer token count not available or not found in usage object for {config_id}. Setting to None.")
+        
         elif model_type == "groq":
             if not config.GROQ_API_KEY:
                 logger.error(f"Missing Groq API key for model {config_id}.")
-                return None
+                return {"error_message": "Missing Groq API key", "response_time": 0}
             groq_client = OpenAI(
                 api_key=config.GROQ_API_KEY,
                 base_url="https://api.groq.com/openai/v1",
             )
+            groq_params = parameters.copy()
+            if is_json_response_expected and groq_params.get("response_format", {}).get("type") == "json_object":
+                if "json" not in prompt.lower():
+                    logger.warning(f"Groq model {config_id} called with response_format=json_object, but 'json' not found in prompt.")
+            else:
+                 groq_params.pop('response_format', None)
+
             api_response = groq_client.chat.completions.create(
                 model=model_id,
                 messages=[{"role": "user", "content": prompt}],
-                **parameters
+                **groq_params
             )
-            response_text_for_error = api_response.choices[0].message.content.strip()
+            response_text_for_error = api_response.choices[0].message.content.strip() if api_response.choices and api_response.choices[0].message else ""
             if hasattr(api_response, 'usage') and api_response.usage:
                 input_tokens = api_response.usage.prompt_tokens
                 output_tokens = api_response.usage.completion_tokens
             else:
                 logger.warning(f"Groq token count not found in usage object for {config_id}. Setting to None.")
-                input_tokens = None
-                output_tokens = None
 
         elif model_type == "sagemaker":
             if not config.AWS_ACCESS_KEY_ID or not config.AWS_SECRET_ACCESS_KEY:
                 logger.error(f"Missing AWS credentials for SageMaker model {config_id}.")
-                return None
+                return {"error_message": "Missing AWS credentials", "response_time": 0}
             sagemaker_client = boto3.client(
                 service_name='sagemaker-runtime',
                 region_name=config.AWS_REGION,
                 aws_access_key_id=config.AWS_ACCESS_KEY_ID,
                 aws_secret_access_key=config.AWS_SECRET_ACCESS_KEY
             )
-            body_payload = {"inputs": prompt, "parameters": parameters}
+            sagemaker_params = parameters.copy()
+            sagemaker_params.pop('response_format', None)
 
-
+            body_payload = {"inputs": prompt, "parameters": sagemaker_params}
             body = json.dumps(body_payload)
-
-            endpoint_name = model_id.split('/')[-1]
+            endpoint_name = model_id
+            
             api_response = sagemaker_client.invoke_endpoint(
                 EndpointName=endpoint_name,
                 ContentType='application/json',
                 Body=body
             )
-            response_body = json.loads(api_response['Body'].read().decode())
-            if isinstance(response_body, list) and len(response_body) > 0 and isinstance(response_body[0], dict):
-                if 'generated_text' in response_body[0]:
-                    response_text_for_error = response_body[0]['generated_text']
-
-                else:
-                    response_text_for_error = str(response_body[0])
-            elif isinstance(response_body, dict):
-
-                for key in ['generated_text', 'text', 'answer', 'completion', 'generation']:
-                    if key in response_body:
-                        response_text_for_error = response_body[key]
-                        break
+            response_body_bytes = api_response['Body'].read()
+            try:
+                response_body_str = response_body_bytes.decode('utf-8')
+                response_body = json.loads(response_body_str)
+                if isinstance(response_body, list) and len(response_body) > 0 and isinstance(response_body[0], dict):
+                    response_text_for_error = response_body[0].get('generated_text', str(response_body[0]))
+                elif isinstance(response_body, dict):
+                    response_text_for_error = response_body.get('generated_text', 
+                                                               response_body.get('text', 
+                                                               response_body.get('answer', 
+                                                               response_body.get('completion', 
+                                                               response_body.get('generation', str(response_body))))))
                 else:
                     response_text_for_error = str(response_body)
-            else:
-                response_text_for_error = str(response_body)
+            except (json.JSONDecodeError, UnicodeDecodeError) as decode_err:
+                logger.error(f"SageMaker response for {config_id} was not valid JSON or UTF-8: {decode_err}. Raw bytes: {response_body_bytes[:100]}")
+                response_text_for_error = response_body_bytes.decode('latin-1', errors='replace')
 
-            
-            
-            
             input_tokens = None
             output_tokens = None
-            logger.error(
-                f"SageMaker token count is not reliably available through the generic invoke_endpoint. "
-                f"Token counts for {config_id} will be 'None'. "
-                f"Implement model-specific token extraction if precise counts are required for SageMaker endpoints."
+            logger.warning(
+                f"SageMaker token count is not reliably available. Token counts for {config_id} will be 'None'."
             )
         else:
             logger.error(f"Unsupported model type: {model_type} for model {config_id}")
-            return None
+            return {"error_message": f"Unsupported model type: {model_type}", "response_time": 0}
 
         elapsed_time = time.time() - start_time
         logger.info(f"Response from {config_id} received in {elapsed_time:.2f}s. Raw: '{response_text_for_error[:100]}...'")
 
+    except APIError as e:
+        elapsed_time = time.time() - start_time
+        logger.error(f"OpenAI API Error for {config_id} after {elapsed_time:.2f}s: {e}. Raw response snippet: {response_text_for_error[:100]}...")
+        error_details = {"type": "APIError", "message": str(e)}
+        if hasattr(e, 'status_code'):
+            error_details["status_code"] = e.status_code
+        if hasattr(e, 'body') and e.body:
+            error_details["body"] = e.body
+        return {"error_message": f"OpenAI API Error: {str(e)}", "response_time": elapsed_time, "details": error_details, "raw_response_text": response_text_for_error}
+    except APIConnectionError as e:
+        elapsed_time = time.time() - start_time
+        logger.error(f"OpenAI API Connection Error for {config_id} after {elapsed_time:.2f}s: {e}. Raw response snippet: {response_text_for_error[:100]}...")
+        return {"error_message": f"OpenAI API Connection Error: {str(e)}", "response_time": elapsed_time, "details": {"type": "APIConnectionError"}, "raw_response_text": response_text_for_error}
+    except RateLimitError as e:
+        elapsed_time = time.time() - start_time
+        logger.error(f"OpenAI Rate Limit Error for {config_id} after {elapsed_time:.2f}s: {e}. Raw response snippet: {response_text_for_error[:100]}...")
+        return {"error_message": f"OpenAI Rate Limit Error: {str(e)}", "response_time": elapsed_time, "details": {"type": "RateLimitError"}, "raw_response_text": response_text_for_error}
     except Exception as e:
         elapsed_time = time.time() - start_time
-        logger.error(f"API call to {config_id} failed after {elapsed_time:.2f}s: {e}. Raw response snippet: {response_text_for_error[:100]}...")
-        return None
-    cleaned_answer = "X"
+        logger.error(f"API call to {config_id} failed after {elapsed_time:.2f}s: {e}. Raw response snippet: {response_text_for_error[:100]}...", exc_info=True)
+        return {"error_message": str(e), "response_time": elapsed_time, "raw_response_text": response_text_for_error}
 
-    if model_type == "groq":
-        processed_text_for_groq = response_text_for_error.strip()
-        think_start_tag = "<think>"
-        think_end_tag = "</think>"
-        content_after_think = processed_text_for_groq
-        groq_answer_found = False
+    parsed_content_for_return = None
 
-        if think_start_tag in processed_text_for_groq:
-            if think_end_tag in processed_text_for_groq:
-                parts = processed_text_for_groq.split(think_end_tag, 1)
-                if len(parts) > 1:
-                    content_after_think = parts[1].strip()
-                    logger.info(f"Groq ({config_id}): Stripped <think> block. Text to parse: '{content_after_think[:150]}...'")
-                else:
-                    logger.warning(f"Groq ({config_id}): Found </think> tag at the end of the response. No content follows. Original: '{response_text_for_error[:100]}...'")
-                    content_after_think = ""
+    if is_json_response_expected:
+        try:
+            json_match = re.search(r"```json\s*([\s\S]*?)\s*```|({.*?})|(\[.*?\])", response_text_for_error, re.DOTALL)
+            if json_match:
+                json_str = next(g for g in json_match.groups() if g is not None)
+                parsed_content_for_return = json.loads(json_str)
+                logger.info(f"Successfully parsed JSON from response for {config_id}.")
             else:
-                logger.warning(f"Groq ({config_id}): Found opening <think> tag without a closing </think> tag. Response might be incomplete or just a thought. Will try to parse full response. Original: '{response_text_for_error[:100]}...'")
-        
-        if not content_after_think:
-            logger.warning(f"Groq ({config_id}): Response is empty after attempting to process <think> block. Original raw: '{response_text_for_error[:100]}...'")
-        else:
-            lines = content_after_think.splitlines()
-            for line in lines:
-                stripped_line = line.strip()
-                if not stripped_line:
-                    continue
-
-                match1 = re.search(r"\b(?:Answer|Option|Choice|The\s+correct\s+answer)\s*(?:is)?\s*[:\-*]*\s*(?:[\*_]{0,2}([A-C])[\*_]{0,2})\b", stripped_line, re.IGNORECASE)
-                if match1:
-                    cleaned_answer = match1.group(1).upper()
-                    logger.info(f"Groq ({config_id}): Extracted answer '{cleaned_answer}' using keyword pattern from line: '{stripped_line[:70]}...'")
-                    groq_answer_found = True
-                    break 
-                
-                if not groq_answer_found:
-                    match2 = re.match(r"^\s*([A-C])\b", stripped_line, re.IGNORECASE)
-                    if match2:
-                        cleaned_answer = match2.group(1).upper()
-                        logger.info(f"Groq ({config_id}): Extracted answer '{cleaned_answer}' using start-of-line pattern from line: '{stripped_line[:70]}...'")
-                        groq_answer_found = True
-                        break
-            
-            if not groq_answer_found:
-                logger.warning(f"Groq ({config_id}): Could not extract a single letter answer (A, B, C) from lines of: '{content_after_think[:150]}...'. Marking as X.")
-
-    elif model_type == "gemini":
-        pass
-    elif response_text_for_error:
-
-
-        match = re.search(r"^(?:[^a-zA-Z0-9]*?(?:Answer(?: is)?)?:?\s*)?([A-Z])", response_text_for_error.strip(), re.IGNORECASE)
-        if match:
-            cleaned_answer = match.group(1).upper()
-            logger.info(f"Extracted answer '{cleaned_answer}' for {config_id} from '{response_text_for_error[:50]}...'")
-        else:
-            logger.error(f"Could not extract single letter answer for {config_id} from '{response_text_for_error[:50]}...'. Marking as X.")
+                parsed_content_for_return = json.loads(response_text_for_error)
+                logger.info(f"Successfully parsed entire response as JSON for {config_id}.")
+        except json.JSONDecodeError:
+            logger.error(f"Failed to parse JSON response for {config_id}. Raw: '{response_text_for_error[:200]}...'")
+            return {
+                "response_json": {"answer": "X", "explanation": "JSON parsing failed"},
+                "response_content": "X",
+                "error_message": "JSON parsing failed",
+                "raw_response_text": response_text_for_error,
+                "response_time": elapsed_time,
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens
+            }
     else:
-        logger.error(f"Empty or no usable response text received for {config_id}. Marking as X.")
-    response_json = {
-        "answer": cleaned_answer,
-        "explanation": ""
-    }
+        cleaned_answer = "X"
+        if response_text_for_error:
+            match = re.search(
+                r"^\s*(?:Answer|Option|Choice|The\s+correct\s+answer\s*is)?\s*[:\-*]*\s*([A-D])\b"
+                r"|^\s*([A-D])\b"
+                r"|\b([A-D])\b",
+                response_text_for_error,
+                re.MULTILINE | re.IGNORECASE
+            )
+            if match:
+                cleaned_answer = next(g for g in match.groups() if g is not None).upper()
+                logger.info(f"Extracted single letter answer '{cleaned_answer}' for {config_id} from '{response_text_for_error[:50]}...'")
+            else:
+                logger.error(f"Could not extract single letter answer for {config_id} from '{response_text_for_error[:50]}...'. Marking as X.")
+        else:
+            logger.error(f"Empty or no usable response text received for {config_id}. Marking as X.")
+        
+        parsed_content_for_return = {"answer": cleaned_answer, "explanation": ""}
 
-    logger.debug(f"Final parsed response for {config_id}: {response_json}")
-
-    return {
-        "response_json": response_json,
+    final_result = {
+        "response_json": parsed_content_for_return if not is_json_response_expected else parsed_content_for_return,
+        "response_content": parsed_content_for_return,
+        "raw_response_text": response_text_for_error,
         "response_time": elapsed_time,
         "input_tokens": input_tokens,
         "output_tokens": output_tokens
-
-
-
-
     }
+    if 'error_message' in (parsed_content_for_return or {}):
+        final_result['error_message'] = parsed_content_for_return['error_message']
 
-def process_questions_with_llm(data: list[dict], model_config_item: dict) -> list[dict]:
-    """
-    Processes each question entry using the specified LLM, expecting only a single letter answer.
-    """
-    results = []
-    total_questions = len(data)
-    config_id = model_config_item.get("config_id", model_config_item.get("model_id"))
-    model_type = model_config_item.get("type")
-
-    loading_animation = None
-    for thread in threading.enumerate():
-        if hasattr(thread, '_target') and thread._target and 'LoadingAnimation' in str(thread._target):
-            frame = sys._current_frames().get(thread.ident)
-            if frame:
-                for local_var in frame.f_locals.values():
-                    if isinstance(local_var, ui_utils.LoadingAnimation):
-                        loading_animation = local_var
-                        break
-
-    for i, entry in enumerate(data):
-        if loading_animation:
-            loading_animation.update_progress(i+1, total_questions)
-
-        logger.info(f"Processing question {i+1}/{total_questions} with model {config_id}...")
-        prompt = generate_prompt(entry, model_type=model_type)
-        llm_data = get_llm_response(prompt, model_config_item)
-
-        llm_answer = ""
-        is_correct = None
-        response_time = None
-        current_input_tokens = None
-        current_output_tokens = None
-        answer_length = 0
-
-
-        if llm_data and llm_data.get('response_json'):
-            parsed_response = llm_data['response_json']
-            response_time = llm_data['response_time']
-            current_input_tokens = llm_data.get('input_tokens')
-            current_output_tokens = llm_data.get('output_tokens')
-
-            llm_answer = parsed_response.get("answer", "").strip().upper()
-            answer_length = len(llm_answer)
-
-
-            if "error_message" in llm_data:
-                logger.warning(f"Q {i+1} ({config_id}): Problem with LLM response: {llm_data['error_message']}")
-
-
-            correct_answer_str = str(entry.get('correctAnswer', '')).strip().upper()
-            if not correct_answer_str or "PLACEHOLDER" in correct_answer_str:
-                logger.warning(f"Q {i+1} ({config_id}): Correct answer missing/placeholder. Cannot evaluate correctness.")
-                is_correct = None
-            elif llm_answer == "X":
-                is_correct = False
-                logger.info(f"Q {i+1} ({config_id}): LLM response parsed as 'X' (see previous error for details). Marked as incorrect.")
-            elif not llm_answer:
-                is_correct = False
-                logger.warning(f"Q {i+1} ({config_id}): LLM provided an empty or non-standard invalid answer ('{llm_answer}'). Marked as incorrect.")
-            else:
-                is_correct = (llm_answer == correct_answer_str)
-
-            logger.info(f"Q {i+1} ({config_id}): LLM Ans: '{llm_answer}', Correct: '{correct_answer_str}', Match: {is_correct}, Time: {response_time:.2f}s")
-
-        else:
-            if llm_data:
-                response_time = llm_data.get('response_time', 0)
-                logger.error(f"Q {i+1} ({config_id}): Failed to parse LLM response or extract answer (internal error in get_llm_response) after {response_time:.2f}s.")
-            else:
-                logger.error(f"Q {i+1} ({config_id}): Failed to get any valid LLM response (API call likely failed).")
-            llm_answer = "ERROR"
-            is_correct = False
-
-        updated_entry = entry.copy()
-        updated_entry.update({
-            'LLM_answer': llm_answer,
-            'is_correct': is_correct,
-            'response_time': response_time,
-            'input_tokens': current_input_tokens,
-            'output_tokens': current_output_tokens,
-            'answer_length': answer_length,
-
-        })
-        results.append(updated_entry)
-    return results
+    return final_result
