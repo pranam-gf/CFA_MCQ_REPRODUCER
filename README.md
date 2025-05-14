@@ -24,22 +24,22 @@ This comprehensive LLM benchmark evaluates the performance of state-of-the-art l
 </thead>
 <tbody>
 <tr>
-<td align="center"><strong>🤖 Models</strong></td>
+<td align="center"><strong>Models</strong></td>
 <td>Claude-3.7-Sonnet, Claude-3.5-Sonnet, Claude-3.5-Haiku, Mistral-Large, Codestral, Palmyra-fin, GPT-4o, O3-mini, O4-mini, GPT-4.1, GPT-4.1-mini, GPT-4.1-nano, Grok-3, Grok-3-mini-beta (high/low effort), Gemini-2.5-Pro, Gemini-2.5-Flash, Deepseek-R1, Llama-4-Maverick, Llama-4-Scout, Llama-Guard-4, Llama-3.3-70B, Llama-3.1-8B-instant</td>
 <td align="center"><strong>22+</strong></td>
 </tr>
 <tr>
-<td align="center"><strong>🧠 Strategies</strong></td>
+<td align="center"><strong>Strategies</strong></td>
 <td>Default, Chain of Thought (CoT), Self-Discover, Self-Consistency with different sample sizes (N=3, N=5)</td>
 <td align="center"><strong>3-5</strong></td>
 </tr>
 <tr>
-<td align="center"><strong>📏 Metrics</strong></td>
+<td align="center"><strong>Metrics</strong></td>
 <td>Accuracy, Precision, Recall, F1 score, Average Latency (ms), Total Input Tokens, Total Output Tokens, Total Tokens, Average Answer Length, Total Cost, Total Run Time</td>
 <td align="center"><strong>11</strong></td>
 </tr>
 <tr>
-<td align="center"><strong>📈 Visualizations</strong></td>
+<td align="center"><strong>Visualizations</strong></td>
 <td>Model-Strategy Accuracy Comparison, Average Processing Time, Total Output Tokens, Combined Performance (Accuracy & Time), Accuracy/F1 Comparison (Default vs SC-CoT), Self-Consistency CoT Comparison (N=3 vs N=5), Accuracy/F1 vs Time Trade-off, Accuracy/F1 vs Cost Trade-off, Latency vs Cost Trade-off, Total Run Time Comparison, Default Strategy Metric Comparisons (Accuracy, F1, Latency), Confusion Matrices</td>
 <td align="center"><strong>15+</strong></td>
 </tr>
