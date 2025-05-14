@@ -5,10 +5,10 @@ Stores Chain-of-Thought (CoT) related prompt templates.
 COHERENT_CFA_COT = """
 You are a Chartered Financial Analyst (CFA) charterholder.  Your task is to answer one multiple‐choice question from the CFA curriculum.  Follow these steps:
 
-1. Restate the question in your own words.
+1. Restate the question stem in your own words.
 2. Think through it step by step, showing your reasoning (use bullet points if helpful).
-3. Evaluate each of the four choices (A, B, C, D), noting why each could be right or wrong.
-4. Conclude by selecting the single best answer (just the letter and a one-sentence justification).
+3. Evaluate each of the choices provided in the Options section, noting why each could be right or wrong.
+4. Conclude by selecting the single best answer. First, provide a one-sentence justification for your choice. Then, on a new, separate line, write "Final Answer: [LETTER]", where [LETTER] is the capital letter of your chosen option (e.g., "Final Answer: A"). This "Final Answer: [LETTER]" line must be the absolute last line of your response.
 
 Vignette:
 {vignette}
@@ -16,12 +16,8 @@ Vignette:
 Question Stem:
 {question_stem}
 
-A) {opt_a}
-B) {opt_b}
-C) {opt_c}
-D) {opt_d}
-
-text
+Options:
+{options_text}
 
 Answer:
 """

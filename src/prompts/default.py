@@ -6,30 +6,38 @@ GEMINI_PROMPT_TEMPLATE = """
 I need you to read a vignette and multiple-choice question from the CFA exam and select the correct answer.
 
 Instructions:
-1. Read the vignette and question text carefully
-2. Choose the single best answer from options A, B, C, or D
-3. Reply with ONLY the letter of your answer (A, B, C, or D)
-4. Do not include explanations or reasoning
+1. Read the vignette and question text carefully.
+2. Analyze the problem and determine the single best answer from the options provided.
+3. Your response will be parsed programmatically. It is ESSENTIAL that you follow the output format precisely.
 
 Vignette:
 {vignette}
 
-Question:
-{question_full_text}
+Question Stem:
+{question_stem}
 
-Your response should be a single letter: A, B, C, or D
-"""
+Options:
+{options_text}
+
+Choose the single best answer.
+Your final output MUST be a single uppercase letter (A, B, C, or D) and NOTHING ELSE. Any deviation will result in a failure.
+Answer:"""
 
 DEFAULT_PROMPT_TEMPLATE = """
-Read the following vignette and multiple-choice question carefully.
-Your task is to select the single best answer from the options provided (A, B, C, or D).
-Do not provide any explanation or reasoning, only the letter of your chosen answer.
+Your task is to answer the following multiple-choice question.
+**Your response MUST be ONLY the single letter of the correct option (A, B, C, or D).**
+**Do NOT include any other text, reasoning, formatting, or explanation.**
 
 Vignette:
 {vignette}
 
-Question:
-{question_full_text}
+Question Stem:
+{question_stem}
 
-Your Answer (select one: A, B, C, or D):
+Options:
+{options_text}
+
+Carefully read the vignette, question, and options. Choose the single best answer.
+
+Answer (select one letter ONLY: A, B, C, or D):
 """

@@ -141,6 +141,33 @@ The program now includes several UI enhancements:
 
 ## Configuration
 
--   **Model Selection & Parameters:** Edit the configuration files within the `src/configs/` directory (e.g., `src/configs/default_config.py`). These files list the available models (`config_id`), their corresponding API identifiers (`model_id`), types (`type`), and strategy-specific parameters (like `temperature`, `max_tokens`). You can add, remove, or modify entries here to control which models are available for selection and how they behave.
+-   **Supported LLM Providers and Models:** This project is designed to work with a variety of LLM providers. Support is integrated for:
+    - OpenAI (e.g., GPT-4o, GPT-4.1 series)
+    - Google Gemini (e.g., Gemini 2.5 Pro, Gemini 2.5 Flash with `thinking_budget`)
+    - Anthropic (e.g., Claude 3.7 Sonnet, Claude 3.5 Sonnet & Haiku)
+    - Groq (e.g., Llama 4 Maverick/Scout, Llama 3.3 70B, Llama 3.1 8B, with `reasoning_effort` for Grok models)
+    - Writer.com (e.g., Palmyra-fin)
+    - xAI (e.g., Grok-3)
+    - AWS Bedrock (various models like Deepseek, Mistral, Meta Llama)
+    - AWS SageMaker (custom deployed endpoints)
+    Specific model IDs, versions, and their parameters are defined within the Python files in the `src/configs/` directory (e.g., `default_config.py`, `cot_config.py`).
+
+-   **Model Selection & Parameters:** Edit the configuration files within the `src/configs/` directory (e.g., `default_config.py`). These files list the available models (`config_id`), their corresponding API identifiers (`model_id`), types (`type` which maps to the correct API client in `llm_clients.py`), and strategy-specific parameters. You can add, remove, or modify entries here to control which models are available for selection and how they behave.
+    - For example, a model configuration entry might look like this:
+      ```python
+      {
+          "config_id": "gemini-2.5-flash",
+          "type": "gemini",
+          "model_id": "gemini-2.5-flash-preview-04-17",
+          "parameters": {
+              "top_p": 0.95,
+              "top_k": 64,
+              "max_output_tokens": 10,
+              "thinking_budget": 0 
+          }
+      }
+      ```
+    - Note that some models support unique parameters that significantly affect their behavior and cost, such as `thinking_budget` for certain Gemini models (e.g., Gemini 2.5 Flash) or `reasoning_effort` for Groq models (e.g., `grok-3-mini-beta`). Ensure these are configured appropriately in the `parameters` section of the model's configuration.
+    - Groq models (`grok-3-mini-beta` and `grok-3-mini-fast-beta`) now have configurations for `high` and `low` `reasoning_effort` respectively.
 -   **API Keys & File Paths:** Global settings like API key environment variable names and default data/results paths can be adjusted in `src/config.py` if needed, though using the `.env` file is recommended for keys.
 -   **Prompt Templates:** Modify or add prompt templates in the `src/prompts/` directory (e.g., `default.py`, `cot.py`) to change how questions are presented to the LLMs for different strategies.

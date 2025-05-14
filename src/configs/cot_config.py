@@ -12,106 +12,87 @@ ALL_MODEL_CONFIGS_COT = [
             "temperature": 0.5, 
             "top_p": 0.95,
             "top_k": 64,
-            "max_output_tokens": 2048
+            "max_tokens": 65536
         }
     },
     {
-        "config_id": "gemini-2.0-flash-cot",
+        "config_id": "gemini-2.5-flash-cot",
         "type": "gemini",
-        "model_id": "gemini-2.0-flash",
+        "model_id": "gemini-2.5-flash-preview-04-17",
         "prompt_strategy_type": "COHERENT_CFA_COT", 
         "parameters": {
             "temperature": 0.5, 
             "top_p": 0.95,
             "top_k": 64,
-            "max_output_tokens": 2048 
+            "max_tokens": 65536,
+            "thinking_budget": 4096 #24576
         }
     },
     {
         "config_id": "claude-3.7-sonnet-cot",
-        "type": "bedrock",
-        "model_id": "anthropic.claude-3-7-sonnet-20250219-v1:0",
-        "use_inference_profile": True,
-        "inference_profile_arn": "arn:aws:bedrock:us-east-1:000518066116:inference-profile/us.anthropic.claude-3-7-sonnet-20250219-v1:0",
+        "type": "anthropic",
+        "model_id": "claude-3-7-sonnet-20250219",
         "prompt_strategy_type": "COHERENT_CFA_COT",
         "parameters": {
             "temperature": 0.5,
             "top_p": 0.999,
             "top_k": 250,
-            "max_tokens": 2048,
-            "anthropic_version": "bedrock-2023-05-31"
+            "max_tokens": 64000
         }
     },
     {
         "config_id": "claude-3.5-sonnet-cot",
-        "type": "bedrock",
-        "model_id": "anthropic.claude-3-5-sonnet-20240620-v1:0",
+        "type": "anthropic",
+        "model_id": "claude-3-5-sonnet-20241022",
         "prompt_strategy_type": "COHERENT_CFA_COT",
         "parameters": {
             "temperature": 0.5,
             "top_p": 0.999,
             "top_k": 250,
-            "max_tokens": 2048,
-            "anthropic_version": "bedrock-2023-05-31"
+            "max_tokens": 8192
         }
     },
     {
         "config_id": "claude-3.5-haiku-cot",
-        "type": "bedrock",
-        "model_id": "anthropic.claude-3-haiku-20240307-v1:0",
+        "type": "anthropic",
+        "model_id": "claude-3-5-haiku-20241022",
         "prompt_strategy_type": "COHERENT_CFA_COT",
         "parameters": {
             "temperature": 0.5,
             "top_p": 0.999,
             "top_k": 250,
-            "max_tokens": 2048,
-            "anthropic_version": "bedrock-2023-05-31"
+            "max_tokens": 8192
         }
     },
     {
-        "config_id": "mistral-large-cot",
-        "type": "bedrock",
-        "model_id": "mistral.mistral-large-2402-v1:0",
+        "config_id": "mistral-large-official-cot",
+        "type": "mistral_official",
+        "model_id": "mistral-large-latest",
         "prompt_strategy_type": "COHERENT_CFA_COT",
         "parameters": {
             "temperature": 0.5,
             "top_p": 0.9,
-            "top_k": 50,
-            "max_tokens": 2048
+            "max_tokens": 4096 
         }
     },
     {
-        "config_id": "llama3-70b-cot",
-        "type": "bedrock",
-        "model_id": "meta.llama3-70b-instruct-v1:0",
+        "config_id": "codestral-latest-cot",
+        "type": "mistral_official",
+        "model_id": "codestral-latest",
         "prompt_strategy_type": "COHERENT_CFA_COT",
         "parameters": {
             "temperature": 0.5,
             "top_p": 0.9,
-            "max_gen_len": 2048 
+            "max_tokens": 32768 
         }
     },
-    {
-        "config_id": "llama3.1-8b-cot",
-        "type": "bedrock",
-        "model_id": "us.meta.llama3-1-8b-instruct-v1:0",
-        "prompt_strategy_type": "COHERENT_CFA_COT",
-        "parameters": {
-            "temperature": 0.5,
-            "top_p": 0.9,
-            "max_gen_len": 2048
-        }
-    },
-
-    
     {
         "config_id": "gpt-4o-cot",
         "type": "openai",
         "model_id": "gpt-4o",
         "prompt_strategy_type": "COHERENT_CFA_COT",
         "parameters": {
-            "temperature": 0.5,
-            "max_tokens": 2048
+            "temperature": 0.5
             
         }
     },
@@ -122,8 +103,8 @@ ALL_MODEL_CONFIGS_COT = [
         "prompt_strategy_type": "COHERENT_CFA_COT",
         "parameters": {
             "temperature": 0.5,
-            "max_completion_tokens": 8000 
-            
+            # "max_tokens": 1500,
+            "response_format": {"type": "json_object"}
         }
     },
     {
@@ -133,8 +114,8 @@ ALL_MODEL_CONFIGS_COT = [
         "prompt_strategy_type": "COHERENT_CFA_COT",
         "parameters": {
             "temperature": 0.5,
-            "max_completion_tokens": 8000 
-            
+            # "max_tokens": 1000,
+            "response_format": {"type": "json_object"}
         }
     },
     {
@@ -144,7 +125,7 @@ ALL_MODEL_CONFIGS_COT = [
         "prompt_strategy_type": "COHERENT_CFA_COT",
         "parameters": {
             "temperature": 0.5,
-            "max_tokens": 2048
+            "max_tokens": 32768
             
         }
     },
@@ -155,7 +136,7 @@ ALL_MODEL_CONFIGS_COT = [
         "prompt_strategy_type": "COHERENT_CFA_COT",
         "parameters": {
             "temperature": 0.5,
-            "max_tokens": 2048
+            "max_tokens": 32768
             
         }
     },
@@ -166,20 +147,37 @@ ALL_MODEL_CONFIGS_COT = [
         "prompt_strategy_type": "COHERENT_CFA_COT",
         "parameters": {
             "temperature": 0.5,
-            "max_tokens": 2048
-            
+            "max_tokens": 32768
         }
     },
-
-    
+    {
+        "config_id": "grok-3-mini-beta-cot-high-effort",
+        "type": "xai",
+        "model_id": "grok-3-mini-beta",
+        "prompt_strategy_type": "COHERENT_CFA_COT",
+        "parameters": {
+            "temperature": 0.1,
+            "reasoning_effort": "high"
+        }
+    },
+    {
+        "config_id": "grok-3-mini-beta-cot-low-effort",
+        "type": "xai",
+        "model_id": "grok-3-mini-beta",
+        "prompt_strategy_type": "COHERENT_CFA_COT",
+        "parameters": {
+            "temperature": 0.1,
+            "reasoning_effort": "low"
+        }
+    },
     {
         "config_id": "grok-3-cot",
         "type": "xai",
         "model_id": "grok-3-latest",
         "prompt_strategy_type": "COHERENT_CFA_COT",
         "parameters": {
-            "temperature": 0.5,
-            "max_tokens": 2048
+            "temperature": 0.1,
+            "max_tokens": 16384
         }
     },
 
@@ -190,21 +188,66 @@ ALL_MODEL_CONFIGS_COT = [
         "model_id": "palmyra-fin",
         "prompt_strategy_type": "COHERENT_CFA_COT",
         "parameters": {
-            "temperature": 0.5,
-            "max_tokens": 2048
+            "temperature": 0.5
         }
     },
-
-    
     {
-        "config_id": "deepseek-r1-distill-llama-70b-via-groq-cot",
-        "type": "groq",
-        "model_id": "deepseek-r1-distill-llama-70b",
-        "prompt_strategy_type": "COHERENT_CFA_COT",
+        "config_id": "deepseek-r1-bedrock-cot",
+        "type": "bedrock",
+        "model_id": "us.deepseek.r1-v1:0", 
         "parameters": {
-            "temperature": 0.5, 
-            "max_tokens": 4000, 
+            "temperature": 0.3,
             "top_p": 0.9
+        }
+    },
+    {
+        "config_id": "groq-llama-4-maverick",
+        "type": "groq",
+        "model_id": "meta-llama/llama-4-maverick-17b-128e-instruct",
+        "parameters": {
+            "temperature": 0.1,
+            "top_p": 0.9,
+            "max_tokens": 8192
+        }
+    },
+    {
+        "config_id": "groq-llama-4-scout",
+        "type": "groq",
+        "model_id": "meta-llama/llama-4-scout-17b-16e-instruct",
+        "parameters": {
+            "temperature": 0.1,
+            "top_p": 0.9,
+            "max_tokens": 8192
+        }
+    },
+    {
+        "config_id": "groq-llama-guard-4",
+        "type": "groq",
+        "model_id": "meta-llama/Llama-Guard-4-12B",
+        "parameters": {
+            "temperature": 0.1,
+            "top_p": 0.9,
+            "max_tokens": 128
+        }
+    },
+    {
+        "config_id": "groq-llama3.3-70b-cot",
+        "type": "groq",
+        "model_id": "llama-3.3-70b-versatile",
+        "parameters": {
+            "temperature": 0.1,
+            "top_p": 0.9,
+            "max_tokens": 32768
+        }
+    },
+    {
+        "config_id": "groq-llama3.1-8b-instant-cot",
+        "type": "groq",
+        "model_id": "llama-3.1-8b-instant",
+        "parameters": {
+            "temperature": 0.1,
+            "top_p": 0.9,
+            "max_tokens": 8192
         }
     }
 ] 

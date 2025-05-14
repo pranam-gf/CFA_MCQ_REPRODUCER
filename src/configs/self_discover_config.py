@@ -1,142 +1,120 @@
 """
-Default model configurations for single-letter answer strategies.
+Model configurations specifically for the Self-Discover strategy.
+Initially mirrors default configs, can be tuned later.
 """
 
-ALL_MODEL_CONFIGS = [
+SELF_DISCOVER_CONFIGS = [
     
     {
-    "config_id": "claude-3.7-sonnet",
+    "config_id": "claude-3.7-sonnet-self-discover",
     "type": "anthropic",
     "model_id": "claude-3-7-sonnet-20250219",
     "parameters": {
         "temperature": 0.1,
         "top_p": 0.999,
         "top_k": 250,
-        "max_tokens": 10
+        "max_tokens": 64000
     }
     },
     {
-        "config_id": "claude-3.5-sonnet",
+        "config_id": "claude-3.5-sonnet-self-discover",
         "type": "anthropic",
         "model_id": "claude-3-5-sonnet-20241022",
         "parameters": {
             "temperature": 0.1,
             "top_p": 0.999,
             "top_k": 250,
-            "max_tokens": 10
+            "max_tokens": 8192
         }
     },
     {
-        "config_id": "claude-3.5-haiku",
+        "config_id": "claude-3.5-haiku-self-discover",
         "type": "anthropic",
         "model_id": "claude-3-5-haiku-20241022",
         "parameters": {
             "temperature": 0.1,
             "top_p": 0.999,
             "top_k": 250,
-            "max_tokens": 10
+            "max_tokens": 8192
         }
     },
     {
-        "config_id": "mistral-large-official",
+        "config_id": "mistral-large-official-self-discover",
         "type": "mistral_official",
         "model_id": "mistral-large-latest",
         "parameters": {
             "temperature": 0.1,
             "top_p": 0.9,
-            "max_tokens": 10
+            "max_tokens": 4096
         }
     },
     {
-        "config_id": "codestral-latest-official",
+        "config_id": "codestral-latest-self-discover",
         "type": "mistral_official",
         "model_id": "codestral-latest",
         "parameters": {
             "temperature": 0.1,
             "top_p": 0.9,
-            "max_tokens": 10
+            "max_tokens": 32768 
         }
     },
     {
-        "config_id": "palmyra-fin-default",
-        "type": "writer",
-        "model_id": "palmyra-fin",
-        "parameters": {
-            "temperature": 0.0,
-            "max_tokens": 4096
-        }
-    },
-    {
-        "config_id": "gpt-4o",
+        "config_id": "gpt-4o-self-discover",
         "type": "openai",
         "model_id": "gpt-4o",
         "parameters": {
-            "temperature": 0.1,
-            "max_tokens": 10,
-            "response_format": {"type": "json_object"}
+            "temperature": 0.1
         }
     },
     
     {
-        "config_id": "o3-mini",
+        "config_id": "gpt-o3-self-discover",
         "type": "openai",
-        "model_id": "o3-mini-2025-01-31",
+        "model_id": "o3",
         "parameters": {
-            "temperature": 1.0,
-            # "max_tokens": 10
+            "temperature": 0.1,
+            "response_format": {"type": "json_object"}
         }
     },
     {
-        "config_id": "o4-mini",
+        "config_id": "gpt-o4-mini-self-discover",
         "type": "openai",
-        "model_id": "o4-mini-2025-04-16",
+        "model_id": "o4-mini",
         "parameters": {
-            "temperature": 1.0,
-            # "max_tokens": 10
+            "temperature": 0.1,
+            "response_format": {"type": "json_object"}
         }
     },
     {
-        "config_id": "gpt-4.1",
+        "config_id": "gpt-4.1-self-discover",
         "type": "openai",
         "model_id": "gpt-4.1-2025-04-14",
         "parameters": {
             "temperature": 0.1,
-            "max_tokens": 10,
-            "response_format": {"type": "json_object"}
+            "max_tokens": 32768
         }
     },
     {
-        "config_id": "gpt-4.1-mini",
+        "config_id": "gpt-4.1-mini-self-discover",
         "type": "openai",
         "model_id": "gpt-4.1-mini-2025-04-14",
         "parameters": {
             "temperature": 0.1,
-            "max_tokens": 10,
-            "response_format": {"type": "json_object"}
+            "max_tokens": 32768
         }
     },
     {
-        "config_id": "gpt-4.1-nano",
+        "config_id": "gpt-4.1-nano-self-discover",
         "type": "openai",
         "model_id": "gpt-4.1-nano-2025-04-14",
         "parameters": {
             "temperature": 0.1,
-            "max_tokens": 10,
-            "response_format": {"type": "json_object"}
+            "max_tokens": 32768
         }
     },
     
     {
-        "config_id": "grok-3",
-        "type": "xai",
-        "model_id": "grok-3-latest",
-        "parameters": {
-            "temperature": 0.1,
-            "max_tokens": 10
-        }
-    },
-    {
-        "config_id": "grok-3-mini-beta-high-effort",
+        "config_id": "grok-3-mini-beta-self-discover-high-effort",
         "type": "xai",
         "model_id": "grok-3-mini-beta",
         "parameters": {
@@ -145,7 +123,7 @@ ALL_MODEL_CONFIGS = [
         }
     },
     {
-        "config_id": "grok-3-mini-beta-low-effort",
+        "config_id": "grok-3-mini-beta-self-discover-low-effort",
         "type": "xai",
         "model_id": "grok-3-mini-beta",
         "parameters": {
@@ -153,34 +131,53 @@ ALL_MODEL_CONFIGS = [
             "reasoning_effort": "low"
         }
     },
+    {
+        "config_id": "grok-3-self-discover",
+        "type": "xai",
+        "model_id": "grok-3-latest",
+        "parameters": {
+            "temperature": 0.1,
+            "max_tokens": 16384
+        }
+    },
     
     {
-    "config_id": "gemini-2.5-pro",
+    "config_id": "gemini-2.5-pro-self-discover",
     "type": "gemini",
     "model_id": "gemini-2.5-pro-exp-03-25",
     "parameters": {
+        "temperature": 0.1,
         "top_p": 0.95,
         "top_k": 64,
-        "max_output_tokens": 10
+        "max_tokens": 65536
     }
     },
     {
-    "config_id": "gemini-2.5-flash",
+    "config_id": "gemini-2.5-flash-self-discover",
     "type": "gemini",
     "model_id": "gemini-2.5-flash-preview-04-17",
     "parameters": {
+        "temperature": 0.1,
         "top_p": 0.95,
         "top_k": 64,
-        "max_output_tokens": 10
+        "max_tokens": 65536,
+        "thinking_budget": 4096 #24576
     }
     },
+        {
+        "config_id": "palmyra-fin-self-discover",
+        "type": "writer",
+        "model_id": "palmyra-fin",
+        "parameters": {
+            "temperature": 0.1
+        }
+    },
     {
-        "config_id": "deepseek-r1-bedrock",
+        "config_id": "deepseek-r1-bedrock-cot",
         "type": "bedrock",
-        "model_id": "us.deepseek.r1-v1:0",
+        "model_id": "us.deepseek.r1-v1:0", 
         "parameters": {
             "temperature": 0.3,
-            # "max_tokens": 10,
             "top_p": 0.9
         }
     },
@@ -191,7 +188,7 @@ ALL_MODEL_CONFIGS = [
         "parameters": {
             "temperature": 0.1,
             "top_p": 0.9,
-            "max_tokens": 10
+            "max_tokens": 8192
         }
     },
     {
@@ -201,7 +198,7 @@ ALL_MODEL_CONFIGS = [
         "parameters": {
             "temperature": 0.1,
             "top_p": 0.9,
-            "max_tokens": 10
+            "max_tokens": 8192
         }
     },
     {
@@ -211,27 +208,28 @@ ALL_MODEL_CONFIGS = [
         "parameters": {
             "temperature": 0.1,
             "top_p": 0.9,
-            "max_tokens": 10
+            "max_tokens": 128
         }
     },
     {
-        "config_id": "groq-llama3.3-70b",
+        "config_id": "groq-llama3.3-70b-self-discover",
         "type": "groq",
         "model_id": "llama-3.3-70b-versatile",
         "parameters": {
             "temperature": 0.1,
             "top_p": 0.9,
-            "max_tokens": 10
+            "max_tokens": 32768
         }
     },
     {
-        "config_id": "groq-llama3.1-8b-instant",
+        "config_id": "groq-llama3.1-8b-instant-self-discover",
         "type": "groq",
         "model_id": "llama-3.1-8b-instant",
         "parameters": {
             "temperature": 0.1,
             "top_p": 0.9,
-            "max_tokens": 10
+            "max_tokens": 8192
         }
-    },
+    }
+    
 ] 

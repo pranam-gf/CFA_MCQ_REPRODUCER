@@ -5,320 +5,686 @@ import logging
 import os
 import pandas as pd
 import numpy as np 
-import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-import plotly.io as pio 
+# import plotly.express as px # Comment out plotly express for now
+# import plotly.graph_objects as go # Comment out plotly graph objects
+# from plotly.subplots import make_subplots # Comment out plotly subplots
+# import plotly.io as pio # Comment out plotly io
+from . import config
+from .utils import ui_utils
+import matplotlib.pyplot as plt
+import seaborn as sns
+import textwrap
+from typing import Dict, List, Union, Optional, Any
+import matplotlib.cm as cm
+from pathlib import Path
+
 logger = logging.getLogger(__name__)
-GOODFIN_PRIMARY_COLOR = '#333333' 
-GOODFIN_SECONDARY_COLOR = '#666666'  
-GOODFIN_ACCENT_COLOR = '#999999'    
-GOODFIN_BACKGROUND_COLOR = '#EDEDED'  
-GOODFIN_TEXT_COLOR = '#333333'      
-GOODFIN_MUTED_TEXT_COLOR = '#666666'  
-GOODFIN_GRID_COLOR = '#CCCCCC'      
-GOODFIN_ERROR_COLOR = '#FF4444'     
-GOODFIN_FONT_FAMILY = "'Helvetica Neue', Helvetica, Arial, sans-serif"
-GOODFIN_TITLE_FONT_SIZE = 20
-GOODFIN_SUBTITLE_FONT_SIZE = 16
-GOODFIN_AXIS_LABEL_FONT_SIZE = 14
-GOODFIN_TICK_LABEL_FONT_SIZE = 12
-GOODFIN_LEGEND_FONT_SIZE = 12
-GOODFIN_ANNOTATION_FONT_SIZE = 10
-LOGO_ASPECT_RATIO = 32 / 138
-LOGO_SIZEX_PAPER = 0.30  
-LOGO_SIZEY_PAPER = LOGO_SIZEX_PAPER * LOGO_ASPECT_RATIO
+INSPIRED_PALETTE = ["#4C72B0", "#DD8452", "#8C8C8C", "#595959", "#9370DB", "#57A057"]
 
-goodfin_template = go.layout.Template()
-
-goodfin_template.layout = go.Layout(
-    font=dict(
-        family=GOODFIN_FONT_FAMILY,
-        size=GOODFIN_AXIS_LABEL_FONT_SIZE,
-        color=GOODFIN_TEXT_COLOR
-    ),
-    title=dict(
-        font_size=GOODFIN_TITLE_FONT_SIZE,
-        x=0.5,
-        xanchor='center',
-        pad=dict(t=20, b=20)
-    ),
-    paper_bgcolor=GOODFIN_BACKGROUND_COLOR,
-    plot_bgcolor=GOODFIN_BACKGROUND_COLOR,
-    xaxis=dict(
-        gridcolor=GOODFIN_GRID_COLOR,
-        linecolor=GOODFIN_MUTED_TEXT_COLOR, 
-        zerolinecolor=GOODFIN_GRID_COLOR,
-        title_font_size=GOODFIN_AXIS_LABEL_FONT_SIZE,
-        tickfont_size=GOODFIN_TICK_LABEL_FONT_SIZE,
-        showgrid=True,
-        gridwidth=1,
-        zeroline=False, 
-        showline=True, 
-        mirror=True 
-    ),
-    yaxis=dict(
-        gridcolor=GOODFIN_GRID_COLOR,
-        linecolor=GOODFIN_MUTED_TEXT_COLOR,
-        zerolinecolor=GOODFIN_GRID_COLOR,
-        title_font_size=GOODFIN_AXIS_LABEL_FONT_SIZE,
-        tickfont_size=GOODFIN_TICK_LABEL_FONT_SIZE,
-        showgrid=True,
-        gridwidth=1,
-        zeroline=False,
-        showline=True,
-        mirror=True
-    ),
-    legend=dict(
-        font_size=GOODFIN_LEGEND_FONT_SIZE,
-        bgcolor='rgba(255,255,255,0.7)', 
-        bordercolor=GOODFIN_GRID_COLOR,
-        orientation="h", 
-        yanchor="bottom", 
-        y=1.02, 
-        xanchor="right", 
-        x=1
-    ),
-    colorway=[GOODFIN_PRIMARY_COLOR, GOODFIN_SECONDARY_COLOR, GOODFIN_ACCENT_COLOR, GOODFIN_ERROR_COLOR],
-    
-    margin=dict(l=80, r=50, t=100, b=80) 
+sns.set_theme(
+    style="ticks", 
+    palette=INSPIRED_PALETTE, 
+    font="sans-serif" 
 )
+plt.rcParams.update({
+    "font.sans-serif": ["Arial", "Helvetica", "DejaVu Sans", "sans-serif"], 
+    "axes.labelsize": 11, 
+    "axes.titlesize": 13, 
+    "font.size": 11,      
+    "legend.fontsize": 10,
+    "xtick.labelsize": 10, 
+    "ytick.labelsize": 10, 
+    "figure.dpi": 300,
+    "savefig.dpi": 300,
+    "axes.grid": False, 
+    # "grid.color": "#E0E0E0", 
+    "axes.edgecolor": "#333333", # Darker edge color for axes lines, similar to reference
+    "axes.linewidth": 1.2, # Make axis lines a bit thicker like in reference
+    "axes.titlepad": 15, 
+    "figure.facecolor": "white", 
+    "savefig.facecolor": "white", 
+    "xtick.direction": "out", # Ticks point outwards
+    "ytick.direction": "out", # Ticks point outwards
+    "xtick.major.size": 5, # Length of the major x-ticks
+    "ytick.major.size": 5, # Length of the major y-ticks
+    "xtick.major.width": 1.2, # Thickness of x-ticks
+    "ytick.major.width": 1.2, # Thickness of y-ticks
+    "xtick.minor.size": 3,  # For minor ticks, if ever used
+    "ytick.minor.size": 3,  # For minor ticks, if ever used
+    "xtick.minor.width": 0.8,
+    "ytick.minor.width": 0.8,
+    "xtick.bottom": True, # Ensure bottom x-ticks are on
+    "ytick.left": True,   # Ensure left y-ticks are on
+    # "text.usetex": False, 
+})
+# --- End Updated Matplotlib/Seaborn Styling ---
 
 
-pio.templates.default = goodfin_template
+def _wrap_labels(ax, width, break_long_words=False):
+    """Wraps labels on an axes object."""
+    labels = []
+    ticks = ax.get_xticks()
+    for label in ax.get_xticklabels():
+        text = label.get_text()
+        labels.append(textwrap.fill(text, width=width,
+                      break_long_words=break_long_words))
+    ax.set_xticks(ticks)
+    ax.set_xticklabels(labels, rotation=0)
 
-def generate_all_charts(all_model_run_summaries: dict, charts_output_dir: str | os.PathLike):
+
+def _safe_get(data_dict: Dict[str, Any], keys: List[str], default: Optional[Any] = None) -> Optional[Any]:
+    for key in keys:
+        if key in data_dict:
+            return data_dict[key]
+    return default
+
+
+def _prepare_plot_data(all_model_run_summaries: dict) -> pd.DataFrame | None:
     """
-    Generates and saves all comparison charts based on the aggregated results from various runs.
-    Focuses on accuracy, response time, and token counts.
+    Prepares data from the summary dictionary into a pandas DataFrame suitable for plotting.
 
     Args:
-        all_model_run_summaries: Dictionary containing summary results for all model_strategy runs.
-                               Keys are typically like 'model_id__strategy_name'.
-        charts_output_dir: Path to the directory to save charts.
+        all_model_run_summaries: A dictionary containing summaries of model runs.
+                                 Expected structure: {model_id: {strategy_name: {metrics...}}}
+
+    Returns:
+        A pandas DataFrame with columns like 'Model', 'Strategy', 'Metric', 'Value',
+        or None if the input is empty or malformed.
     """
-    logo_base64_data_uri = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTM4IiBoZWlnaHQ9IjMyIiB2aWV3Qm94PSIwIDAgMTM4IDMyIiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgo8ZyBjbGlwLXBhdGg9InVybCgjY2xpcDBfNDAwM181MjA4KSI+CjxwYXRoIGZpbGwtcnVsZT0iZXZlbm9kZCIgY2xpcC1ydWxlPSJldmVub2RkIiBkPSJNMTMyLjU4NSAyNC43MzM5VjE0Ljc3ODRDMTMyLjU4NSAxMS43OTM0IDEzMS4yMzIgMTAuNDE4MSAxMjguMDI0IDEwLjQxODFDMTI0Ljg4MSAxMC40MTgxIDEyMi4zNCAxMi4yNjgzIDEyMS41NjYgMTQuMjU4NFYyNC43MzM5SDExNy4wMjJWNy4xMDI3MUgxMjEuNTY2VjEyLjE3ODRDMTIyLjQ5MSA5LjMyOTk3IDEyNS4zMDEgNi42OTIxNiAxMjkuNjMyIDYuNjkyMTZDMTMzLjkwNSA2LjY5MjE2IDEzNy4xMjkgOC45NjAzMSAxMzcuMTI5IDEzLjk1NzZWMjQuNzMzOUgxMzIuNTg1Wk0xMDkuODIyIDExLjQxNjNIMTAwLjgxMVYyNC43MzM5SDk2LjI2NjdWMTEuNDE2M0g5Mi4zNDc5VjcuOTIzMjNIOTYuMjY2N1Y2LjE0ODk5Qzk2LjI2NjcgMS44OTA5MyA5OC42MDQ0IDAuMDA1NzQwMjQgMTAyLjk3MyAwLjAwNTc0MDI0SDExNC4zNjZWMy43MzE2MkgxMDQuMDY2QzEwMS45OSAzLjY4Mjk4IDEwMC44MTEgNC4yODA1OCAxMDAuODExIDYuNzAzNDJWNy45MjMxSDExNC4zNjZWMjQuNzM0MUgxMDkuODIyVjExLjQxNjNaTTg1LjU3MzMgMjAuMTg3N1YxOS4wNzU2Qzg0LjYxMDggMjIuMjc2OCA4Mi4wNzY4IDI1LjEzMzIgNzcuNDQ2OSAyNS4xMzMyQzcyLjE4MDMgMjUuMTMzMiA2OC4xNTggMjEuNDQ0OCA2OC4xNTggMTUuOTQyNkM2OC4xNTggMTAuMzc0NCA3Mi4wNjQ3IDYuNjkyMjMgNzcuNDQ2OSA2LjY5MjIzQzgyLjEyMzggNi42OTIyMyA4NC42MjIyIDguOTg0OTEgODUuNTczMyAxMi4zMzM1Vi0wLjAwMTk1MzEySDkwLjExNzRWMjQuNzMzOUg4NS44OTQ2Qzg1Ljg5NDYgMjQuNzMzOSA4NS41NzMzIDIyLjI5IDg1LjU3MzMgMjAuMTg3N1pNNzguOTEwNCAxMC4yNjcyQzc1LjAyMjIgMTAuMjY3MiA3Mi44MDA2IDEyLjUzNCA3Mi44MDA2IDE1Ljk0MjZDNzIuODAwNiAxOS4zNDAzIDc1LjIzODEgMjEuNTY5MSA3OC45MTA0IDIxLjU2OTFDODMuMDI2IDIxLjU2OTEgODUuNTczMyAxOS4zMTM3IDg1LjU3MzMgMTUuOTQyNkM4NS41NzMzIDEyLjMxNjUgODIuOTg2NiAxMC4yNjcyIDc4LjkxMDQgMTAuMjY3MlpNNTYuMDI1MSAyNS4xNDQyQzQ5LjQ1MTggMjUuMTQ0MiA0NC45NDkxIDIxLjk0NDIgNDQuOTQ5MSAxNS45NTM2QzQ0Ljk0OTEgOS45OTg5NyA0OS40NTE4IDYuNjkyMjMgNTYuMDI1MSA2LjY5MjIzQzYyLjU1MjYgNi42OTIyMyA2Ny4wMDkyIDkuOTk4OTcgNjcuMDA5MiAxNS45NTM2QzY3LjAwOTUgMjEuOTQ0MiA2Mi41NTI2IDI1LjE0NDIgNTYuMDI1MSAyNS4xNDQyWk01Ni4wMjUxIDEwLjIzNDNDNTIuNDI3IDEwLjIzNDMgNDkuNTQ3OSAxMi4zMDE0IDQ5LjU0NzkgMTUuOTUzN0M0OS41NDc5IDE5LjYwNiA1Mi4zODEyIDIxLjYwMjUgNTYuMDI1MSAyMS42MDI1QzU5LjU3NzEgMjEuNjAyNSA2Mi40MTA3IDE5LjYwNjYgNjIuNDEwNyAxNS45NTM3QzYyLjQxMDcgMTIuMzM2NyA1OS42MjMyIDEwLjIzNDIgNTYuMDI1MSAxMC4yMzQyVjEwLjIzNDNaTTMyLjgxNjQgMjUuMTQ0MkMyNi4yNDMgMjUuMTQ0MiAyMS43NDA0IDIxLjk0NDIgMjEuNzQwNCAxNS45NTM2QzIxLjc0MDQgOS45OTg5NyAyNi4yNDMgNi42OTIyMyAzMi44MTY0IDYuNjkyMjNDMzkuMzQzOSA2LjY5MjIzIDQzLjgwMDUgOS45OTg5NyA0My44MDA1IDE1Ljk1MzZDNDMuODAwNSAyMS45NDQyIDM5LjM0MzkgMjUuMTQ0MiAzMi44MTY0IDI1LjE0NDJaTTMyLjgxNjQgMTAuMjM0M0MyOS4yMTgzIDEwLjIzNDMgMjYuMzM5MiAxMi4zMDE0IDI2LjMzOTIgMTUuOTUzN0MyNi4zMzkyIDE5LjYwNiAyOS4xNzI1IDIxLjYwMjUgMzIuODE2NCAyMS42MDI1QzM2LjM2ODMgMjEuNjAyNSAzOS4yMDE5IDE5LjYwNjYgMzkuMjAxOSAxNS45NTM3QzM5LjIwMTkgMTIuMzM2NyAzNi40MTQ0IDEwLjIzNDIgMzIuODE2NCAxMC4yMzQyVjEwLjIzNDNaTTE0LjI2NDggOC43OTU0NEMxNi42Njg1IDkuOTk0NzggMTguOTI3MiAxMS44NjE5IDE4LjkyNzIgMTQuNjg2MUMxOC45MjcyIDE5LjMzNjEgMTUuMjk2NiAyMi4wMjk3IDkuNTAwNiAyMi4wMjk3QzYuNTQ3NDYgMjIuMTMxNSA1LjE1MDc1IDIyLjQxNDMgNS4xNTA3NSAyMy41OTM4QzUuMTUwNzUgMjQuMzE2MyA1LjcwMzE0IDI0LjczNDIgNi43NzEyIDI0LjczNDJMMTIuNDgwMiAyNC43MzQ5QzE3LjE0MTggMjQuNzM0OSAxOS44ODU2IDI2LjA4MzQgMTkuODg1NiAzMC4zNDE2VjMxLjk5OEgxNS4zNDE4VjMxLjE2MTZDMTUuMzQxOCAyOC45ODM1IDEzLjg2MjggMjguMjQzMiAxMS40OTY5IDI4LjI0MzJINi4wNTkxNEMxLjg0NDc4IDI4LjI0MzIgMC41NTc3OTMgMjYuNzk4MyAwLjU1Nzc5MyAyNC44ODIxQzAuNTU3NzkzIDIyLjQ0ODMgMi44MTgxMiAyMS42MjM2IDUuODUxODQgMjEuNTk4QzIuMjM3OTkgMjAuNjU2NCAtMC4wMDAzNjYyMTEgMTguMjAxMiAtMC4wMDAzNjYyMTEgMTQuNDY0MkMtMC4wMDAzNjYyMTEgOS43MzMwMSAzLjY2Njk0IDYuNjkyMSA5LjUwMDYgNi42OTIxQzEwLjI5NzkgNi42OTE0NyAxMS4wOTMyIDYuNzcyMTMgMTEuODc0MSA2LjkzMjgyTDIxLjMyMzUgNi45MDQzM1YxMC40MzUxQzE4Ljc5ODIgMTAuNDk2NyAxNi4xMzcyIDkuNjA0MDcgMTQuMjY0OCA4Ljc5NTQ0Wk05LjQ5OTUyIDEwLjI1OTVDNi40NjQ5MiAxMC4yNTk1IDQuNDA5MjMgMTEuODMwOCA0LjQwOTIzIDE0LjUwMjRDNC40MDkyMyAxNy4xNzQgNi40MjgyOCAxOC43MTI0IDkuNDk5NTIgMTguNzEyNEMxMi40OTcyIDE4LjcxMjQgMTQuNTExOSAxNy4xNzQ0IDE0LjUxMTkgMTQuNTAyNEMxNC41MTE5IDExLjg1ODcgMTIuNTMzOSAxMC4yNTk1IDkuNDk5NTIgMTAuMjU5NVoiIGZpbGw9IiMzNzMzMzgiLz4KPC9nPgo8ZGVmcz4KPGNsaXBQYXRoIGlkPSJjbGlwMF80MDAzXzUyMDgiPgo8cmVjdCB3aWR0aD0iMTM4IiBoZWlnaHQ9IjMyIiBmaWxsPSJ3aGl0ZSIvPgo8L2NsaXBQYXRoPgo8L2RlZnM+Cjwvc3ZnPg=="    
-    logo_base_config = dict(
-        source=logo_base64_data_uri,
-        xref="paper", yref="paper",
-        sizex=LOGO_SIZEX_PAPER,
-        sizey=LOGO_SIZEY_PAPER,
-        xanchor="right", yanchor="top",
-        layer="above"            
-    )
+    plot_data = []
+    numerical_metrics = ['accuracy', 'f1_score', 'precision', 'recall', 'average_latency_ms', 'total_cost', 'total_tokens', 'avg_answer_length', 'total_run_time_s']
 
     if not all_model_run_summaries:
-        logger.warning("No model run summaries provided. Skipping chart generation.")
+        logger.warning("No model run summaries provided for plotting.")
+        return None
+
+    for model_id, strategies in all_model_run_summaries.items():
+        if not isinstance(strategies, dict):
+            logger.warning(f"Expected dictionary of strategies for model '{model_id}', got {type(strategies)}. Skipping.")
+            continue
+        for strategy_name, combined_metrics in strategies.items():
+            if not isinstance(combined_metrics, dict):
+                logger.warning(f"Expected dictionary of combined metrics for model '{model_id}', strategy '{strategy_name}', got {type(combined_metrics)}. Skipping.")
+                continue
+
+            if "error" in combined_metrics:
+                logger.warning(f"Run for model '{model_id}', strategy '{strategy_name}' encountered an error: {combined_metrics['error']}. Skipping metrics.")
+                continue
+
+            for metric_name in numerical_metrics:
+                value = combined_metrics.get(metric_name)
+                if isinstance(value, (int, float)):
+                     plot_data.append({
+                        'Model': model_id,
+                        'Strategy': strategy_name, 
+                        'Metric': metric_name,
+                        'Value': float(value)
+                    })
+                elif value is not None:
+                     logger.debug(f"Metric '{metric_name}' for {model_id}/{strategy_name} has non-numeric value '{value}'. Skipping for numerical plot.")
+
+
+    if not plot_data:
+        logger.warning("No valid data points extracted for plotting.")
+        return None
+
+    df = pd.DataFrame(plot_data)
+    df['Value'] = pd.to_numeric(df['Value'], errors='coerce')
+    df.dropna(subset=['Value'], inplace=True) 
+
+    if df.empty:
+        logger.warning("DataFrame is empty after processing and cleaning. No plots will be generated.")
+        return None
+
+    logger.info(f"Prepared DataFrame for plotting with {len(df)} valid rows.")
+    return df
+
+def _get_strategy_type(strategy_name: str) -> str:
+    """Extracts the base strategy type from the full strategy name."""
+    if "Self-Consistency" in strategy_name:
+        return "SC-CoT"
+    elif "Self-Discover" in strategy_name:
+        return "Self-Discover"
+    elif "Default" in strategy_name:
+        return "Default"
+    else:
+        return "Unknown"
+
+def _get_strategy_param(strategy_name: str) -> str:
+    """Extracts the parameter (e.g., N=3) from the strategy name, if present."""
+    if "N=3" in strategy_name:
+        return "N=3"
+    elif "N=5" in strategy_name:
+        return "N=5"
+    else:
+        return "" 
+
+
+# --- Modify Plotting Function to use Matplotlib/Seaborn ---
+def _plot_metric_by_strategy_comparison(df: pd.DataFrame, output_dir: Union[str, Path], metric: str):
+    """Generates grouped bar chart comparing key strategies for each model using Seaborn."""
+    metric_df = df[df['Metric'] == metric].copy()
+    if metric_df.empty:
+        logger.info(f"Skipping '{metric}' by strategy comparison plot: No data found for this metric.")
         return
 
-    logger.info(f"Generating comparison charts in {charts_output_dir}...")
-    os.makedirs(charts_output_dir, exist_ok=True)
+    # Keep the original filtering for strategies to compare if needed, or adjust as necessary
+    strategies_to_compare_explicit = [
+        s for s in df['Strategy'].unique() 
+        if "Default" in s or "Self-Discover" in s or ("Self-Consistency CoT" in s and "N=3" in s)
+    ]
+    if not strategies_to_compare_explicit:
+         logger.info(f"Skipping '{metric}' by strategy comparison plot: No standard strategies found.")
+         return
 
-    
-    plot_data_items = []
-    for run_id, summary in all_model_run_summaries.items():
-        if summary.get('metrics') is not None and 'error' not in summary:
-            model_name = summary.get('model', run_id.split('__')[0] if '__' in run_id else run_id)
-            strategy_name = summary.get('strategy', run_id.split('__')[1] if '__' in run_id else 'default')
-            display_name = f"{model_name} ({strategy_name})"
-            plot_data_items.append({
-                'run_id': run_id,
-                'display_name': display_name,
-                'accuracy': summary['metrics'].get('accuracy', 0.0),
-                'avg_time_per_question': summary.get('avg_time_per_question'),
-                'total_output_tokens': summary.get('total_output_tokens')
-            })
+    df_comp = metric_df[metric_df['Strategy'].isin(strategies_to_compare_explicit)].copy()
 
-    if not plot_data_items:
-        logger.warning("No successful model runs with metrics found to generate charts.")
+    if df_comp.empty or df_comp['Model'].nunique() < 1:
+        included_models = df_comp['Model'].unique().tolist() if not df_comp.empty else []
+        logger.info(f"Skipping '{metric}' by strategy comparison plot: Not enough data for comparison across models. Found models: {included_models}")
         return
-    df_plot = pd.DataFrame(plot_data_items)
-    df_plot = df_plot.sort_values(by='accuracy', ascending=False)
-    figure_height_accuracy = max(600, len(df_plot) * 50)
-    figure_width_accuracy = max(900, len(df_plot) * 80)    
-    margins = goodfin_template.layout.margin
-    margin_l = margins.l if margins and margins.l is not None else 0
-    margin_r = margins.r if margins and margins.r is not None else 0
-    margin_t = margins.t if margins and margins.t is not None else 0
-    margin_b = margins.b if margins and margins.b is not None else 0
-
-    plot_area_width_accuracy = figure_width_accuracy - margin_l - margin_r
-    plot_area_height_accuracy = figure_height_accuracy - margin_t - margin_b
     
-    logo_x_accuracy, logo_y_accuracy = 1.0, 1.0 
-    if plot_area_width_accuracy > 0 and plot_area_height_accuracy > 0:
-        logo_x_accuracy = 1 + (margin_r / plot_area_width_accuracy)
-        logo_y_accuracy = 1 + (margin_t / plot_area_height_accuracy)
-    else:
-        logger.warning("Plot area non-positive for accuracy chart. Defaulting logo position.")
-        
-    accuracy_logo_properties = {**logo_base_config, "x": logo_x_accuracy, "y": logo_y_accuracy}
+    metric_title = metric.replace('_', ' ').title()
+    # Updated title for clarity, will be styled further
+    title = f'{metric_title} Comparison Across Strategies and Models'
 
-    fig_accuracy = px.bar(
-        df_plot, x='display_name', y='accuracy', title='<b>Model-Strategy Accuracy Comparison</b>', 
-        labels={'accuracy': 'Accuracy Score', 'display_name': 'Model (Strategy)'},
-        text='accuracy'
-    )
-    fig_accuracy.update_traces(
-        texttemplate='%{text:.3f}', textposition='outside',
-        marker_color=GOODFIN_PRIMARY_COLOR, 
-        marker_line_color='black', 
-        marker_line_width=1.5, opacity=0.8
-    )
-    fig_accuracy.update_layout(
-        xaxis_tickangle=-45, yaxis_range=[0, max(1.05, df_plot['accuracy'].max() * 1.1 if not df_plot.empty else 1.05)],
-        height=figure_height_accuracy, width=figure_width_accuracy,
-        yaxis_title="Accuracy Score", xaxis_title="Model (Strategy)",
-        images=[accuracy_logo_properties]
-    )
-    fig_accuracy.write_image(os.path.join(charts_output_dir, 'model_strategy_comparison_accuracy.png'), scale=2) 
-    fig_accuracy.write_html(os.path.join(charts_output_dir, 'model_strategy_comparison_accuracy.html'))
-    logger.info(f"Saved accuracy chart to {charts_output_dir}")
-
-    df_time_plot = df_plot.dropna(subset=['avg_time_per_question'])
-    if not df_time_plot.empty:
-        figure_height_time = max(600, len(df_time_plot) * 50)
-        figure_width_time = max(900, len(df_time_plot) * 80)
-
-        plot_area_width_time = figure_width_time - margin_l - margin_r
-        plot_area_height_time = figure_height_time - margin_t - margin_b
-
-        logo_x_time, logo_y_time = 1.0, 1.0
-        if plot_area_width_time > 0 and plot_area_height_time > 0:
-            logo_x_time = 1 + (margin_r / plot_area_width_time)
-            logo_y_time = 1 + (margin_t / plot_area_height_time)
-        else:
-            logger.warning("Plot area non-positive for time chart. Defaulting logo position.")
-        
-        time_logo_properties = {**logo_base_config, "x": logo_x_time, "y": logo_y_time}
-
-        fig_time = px.bar(
-            df_time_plot, x='display_name', y='avg_time_per_question', title='<b>Average Processing Time per Question</b>',
-            labels={'avg_time_per_question': 'Avg Time/Q (s)', 'display_name': 'Model (Strategy)'},
-            text='avg_time_per_question'
-        )
-        fig_time.update_traces(
-            texttemplate='%{text:.2f}s', textposition='outside',
-            marker_color=GOODFIN_PRIMARY_COLOR, 
-            marker_line_color='black', 
-            marker_line_width=1.5, opacity=0.8
-        )
-        fig_time.update_layout(
-            xaxis_tickangle=-45, 
-            height=figure_height_time, width=figure_width_time,
-            yaxis_title="Average Time per Question (s)", xaxis_title="Model (Strategy)",
-            yaxis_range=[0, df_time_plot['avg_time_per_question'].max() * 1.15 if not df_time_plot.empty else 10],
-            images=[time_logo_properties]
-        )
-        fig_time.write_image(os.path.join(charts_output_dir, 'model_strategy_comparison_response_time.png'), scale=2)
-        fig_time.write_html(os.path.join(charts_output_dir, 'model_strategy_comparison_response_time.html'))
-        logger.info(f"Saved response time chart to {charts_output_dir}")
-    else:
-        logger.info("No valid response time data to plot or all are NaN.")
-
+    # Dynamically adjust height based on number of strategies and models
+    num_models = df_comp['Model'].nunique()
+    num_strategies = df_comp['Strategy'].nunique()
     
-    df_token_plot = df_plot[df_plot['total_output_tokens'] > 0].dropna(subset=['total_output_tokens'])
-    if not df_token_plot.empty:
-        figure_height_tokens = max(600, len(df_token_plot) * 50)
-        figure_width_tokens = max(900, len(df_token_plot) * 80)
+    # Start with a base height and add per model, adjust multiplier as needed
+    # The width might need adjustment if model names are long.
+    plt.figure(figsize=(max(10, num_models * 2), 6 + num_strategies * 0.5))
 
-        plot_area_width_tokens = figure_width_tokens - margin_l - margin_r
-        plot_area_height_tokens = figure_height_tokens - margin_t - margin_b
-        
-        logo_x_tokens, logo_y_tokens = 1.0, 1.0
-        if plot_area_width_tokens > 0 and plot_area_height_tokens > 0:
-            logo_x_tokens = 1 + (margin_r / plot_area_width_tokens)
-            logo_y_tokens = 1 + (margin_t / plot_area_height_tokens)
-        else:
-            logger.warning("Plot area non-positive for tokens chart. Defaulting logo position.")
 
-        tokens_logo_properties = {**logo_base_config, "x": logo_x_tokens, "y": logo_y_tokens}
-        
-        fig_tokens = px.bar(
-            df_token_plot, x='display_name', y='total_output_tokens', title='<b>Total Output Tokens Generated</b>',
-            labels={'total_output_tokens': 'Total Output Tokens', 'display_name': 'Model (Strategy)'},
-            text='total_output_tokens'
-        )
-        fig_tokens.update_traces(
-            texttemplate='%{text:,.0f}', textposition='outside', 
-            marker_color=GOODFIN_PRIMARY_COLOR, 
-            marker_line_color='black', 
-            marker_line_width=1.5, opacity=0.8
-        )
-        fig_tokens.update_layout(
-            xaxis_tickangle=-45,
-            height=figure_height_tokens, width=figure_width_tokens,
-            yaxis_title="Total Output Tokens", xaxis_title="Model (Strategy)",
-            yaxis_range=[0, df_token_plot['total_output_tokens'].max() * 1.15 if not df_token_plot.empty else 1000],
-            images=[tokens_logo_properties]
-        )
-        fig_tokens.write_image(os.path.join(charts_output_dir, 'model_strategy_comparison_output_tokens.png'), scale=2)
-        fig_tokens.write_html(os.path.join(charts_output_dir, 'model_strategy_comparison_output_tokens.html'))
-        logger.info(f"Saved output tokens chart to {charts_output_dir}")
-    else:
-        logger.info("No output token data to plot or all are zero/NaN.")
+    # Use the INSPIRED_PALETTE defined at the top of the file
+    # Dynamically adjust the number of colors from the palette based on the number of unique strategies
+    current_palette = INSPIRED_PALETTE[:num_strategies] if num_strategies > 0 else INSPIRED_PALETTE[:1]
 
+    # Swapped x and y, changed orient to 'v', and hue to 'Strategy'
+    ax = sns.barplot(data=df_comp, x='Model', y='Value', hue='Strategy', palette=current_palette)
+
+    # Add data labels on top of each bar
+    for p in ax.patches:
+        height = p.get_height()
+        try:
+            if height == 0:
+                label_text = '0'
+            elif abs(height) < 0.001 and height != 0:
+                label_text = f'{height:.2e}'
+            elif abs(height) < 1:
+                label_text = f'{height:.3f}'
+            elif abs(height) < 100:
+                label_text = f'{height:.2f}'
+            else:
+                label_text = f'{int(round(height))}'
+        except TypeError:
+            label_text = "N/A"
+
+        ax.text(p.get_x() + p.get_width() / 2.,
+                height + (ax.get_ylim()[1] * 0.01), # Position label slightly above the bar
+                label_text,
+                ha='center', 
+                va='bottom',
+                fontsize=plt.rcParams["font.size"] * 0.8)
+
+    ax.set_xlabel("Model") # X-axis is now Model
+    ax.set_ylabel(metric_title) # Y-axis is the metric value
     
-    df_combined_plot = df_plot.dropna(subset=['avg_time_per_question', 'accuracy'])
-    if not df_combined_plot.empty:
-        figure_height_combined = max(700, len(df_combined_plot) * 60)
-        figure_width_combined = max(1000, len(df_combined_plot) * 90)
+    # Set title with bold font and left alignment
+    ax.set_title(title, fontsize=plt.rcParams["axes.titlesize"], pad=plt.rcParams["axes.titlepad"], loc='left', fontweight='bold')
 
-        plot_area_width_combined = figure_width_combined - margin_l - margin_r
-        plot_area_height_combined = figure_height_combined - margin_t - margin_b
+    # Add solid y-axis grid lines and ensure they are behind the bars
+    ax.yaxis.grid(True, linestyle='-', linewidth=0.5, alpha=0.7, color='lightgray')
+    ax.set_axisbelow(True)
 
-        logo_x_combined, logo_y_combined = 1.0, 1.0
-        if plot_area_width_combined > 0 and plot_area_height_combined > 0:
-            logo_x_combined = 1 + (margin_r / plot_area_width_combined)
-            logo_y_combined = 1 + (margin_t / plot_area_height_combined)
+    # Set y-axis limits, especially for percentage-like metrics
+    if metric.lower() in ['accuracy', 'f1_score', 'precision', 'recall'] or \
+       'rate' in metric.lower() or 'percentage' in metric.lower() or 'score' in metric.lower():
+        current_max_val = df_comp['Value'].max() if not df_comp.empty else 1.0
+        current_min_val = df_comp['Value'].min() if not df_comp.empty else 0.0
+        
+        # Ensure y-axis starts at 0 (or slightly below if negative values are possible and present)
+        plot_min_y = 0 if current_min_val >= 0 else current_min_val * 1.1 # Adjust if negative values are meaningful
+
+        # For scores typically between 0 and 1
+        if metric.lower() in ['accuracy', 'f1_score', 'precision', 'recall']:
+            # Ensure y-axis goes up to at least 1.0 (or a bit more)
+            plot_max_y = max(1.05, current_max_val * 1.05 if current_max_val > 0 else 1.05)
         else:
-            logger.warning("Plot area non-positive for combined chart. Defaulting logo position.")
-
-        combined_logo_properties = {**logo_base_config, "x": logo_x_combined, "y": logo_y_combined}
-
-        fig_combined = make_subplots(specs=[[{"secondary_y": True}]])
-        fig_combined.add_trace(
-            go.Bar(x=df_combined_plot['display_name'], y=df_combined_plot['accuracy'], name='Accuracy',
-                   marker_color=GOODFIN_PRIMARY_COLOR, 
-                   text=df_combined_plot['accuracy'], 
-                   texttemplate='%{text:.3f}', textposition='outside', opacity=0.8),
-            secondary_y=False,
-        )
-        fig_combined.add_trace(
-            go.Scatter(x=df_combined_plot['display_name'], y=df_combined_plot['avg_time_per_question'], name='Avg Time/Q (s)',
-                       line=dict(color=GOODFIN_SECONDARY_COLOR, width=2.5), 
-                       mode='lines+markers', 
-                       marker=dict(size=8, line=dict(width=1, color=GOODFIN_BACKGROUND_COLOR)),
-                       text=df_combined_plot['avg_time_per_question'], texttemplate='%{text:.2f}s', textposition="top center"),
-            secondary_y=True,
-        )
-        fig_combined.update_layout(
-            title_text="<b>Combined Performance: Accuracy & Avg. Question Time</b>",
-            xaxis_tickangle=-45, 
-            height=figure_height_combined, width=figure_width_combined,
-            xaxis_title="Model (Strategy)",
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5), 
-            barmode='group',
-            images=[combined_logo_properties]
-        )
-        fig_combined.update_yaxes(
-            title_text="<b>Accuracy Score</b>", secondary_y=False, range=[0, max(1.05, df_combined_plot['accuracy'].max() * 1.1 if not df_combined_plot.empty else 1.05)],
-            showgrid=True, gridcolor=GOODFIN_GRID_COLOR, gridwidth=1,
-            linecolor=GOODFIN_MUTED_TEXT_COLOR, showline=True, mirror=True
-        )
-        fig_combined.update_yaxes(
-            title_text="<b>Avg Time/Q (s)</b>", secondary_y=True, 
-            range=[0, df_combined_plot['avg_time_per_question'].max() * 1.15 if not df_combined_plot.empty else 10],
-            showgrid=False, 
-            linecolor=GOODFIN_MUTED_TEXT_COLOR, showline=True, mirror=True
-        )
-        fig_combined.write_image(os.path.join(charts_output_dir, 'model_strategy_combined_metrics.png'), scale=2)
-        fig_combined.write_html(os.path.join(charts_output_dir, 'model_strategy_combined_metrics.html'))
-        logger.info(f"Saved combined metrics chart to {charts_output_dir}")
+            plot_max_y = current_max_val * 1.1 if current_max_val > 0 else 0.1 # For other rates/percentages
+            if current_max_val == 0 and current_min_val == 0 : plot_max_y = 0.1 # Handle all zero case
+        
+        ax.set_ylim(bottom=plot_min_y, top=plot_max_y)
     else:
-        logger.warning("Not enough data for combined metrics chart (possibly all response times or accuracies are NaN).")
+        # For other metrics like latency, ensure it starts at 0 if all values are positive
+        if not df_comp.empty and df_comp['Value'].min() >= 0:
+            ax.set_ylim(bottom=0, top=df_comp['Value'].max() * 1.1 if df_comp['Value'].max() > 0 else None)
+        elif not df_comp.empty:
+            ax.set_ylim(top=df_comp['Value'].max() * 1.1 if df_comp['Value'].max() > 0 else None) # Allow auto bottom for negative values if any
 
-    logger.info(f"All charts saved to {charts_output_dir}")
+    # Improve legend placement and title
+    plt.legend(title='Strategy', bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0.)
+    
+    # Rotate x-axis labels if model names are long
+    plt.xticks(rotation=45, ha="right", fontsize=plt.rcParams["xtick.labelsize"] * 0.9) # Adjust rotation and size as needed
+
+    sns.despine(ax=ax, top=True, right=True, left=False, bottom=False, trim=False) 
+
+    plt.tight_layout(rect=[0, 0, 0.85, 1]) # Adjust layout to make space for legend
+    
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+    
+    # Updated filename to reflect new structure if desired, or keep as is
+    chart_filename = output_path / f"comparison_{metric.lower()}_by_model_and_strategy.png" 
+    plt.savefig(chart_filename, dpi=plt.rcParams["savefig.dpi"], bbox_inches='tight')
+    plt.close()
+    logger.info(f"Saved chart: {chart_filename}")
+
+
+def _plot_sc_comparison(df: pd.DataFrame, output_dir: Union[str, Path], metric: str = 'accuracy'):
+    """Generates grouped bar chart comparing SC-CoT N=3 vs N=5 using Seaborn."""
+    metric_df = df[df['Metric'] == metric].copy()
+    if metric_df.empty:
+        logger.info(f"Skipping SC '{metric}' comparison plot: No data found for this metric.")
+        return
+
+    metric_df['strategy_type'] = metric_df['Strategy'].apply(_get_strategy_type)
+    metric_df['strategy_param'] = metric_df['Strategy'].apply(_get_strategy_param)
+    metric_df['base_model_id'] = metric_df['Model']
+
+    # Filter for SC-CoT strategies only
+    df_comp = metric_df[metric_df['strategy_type'] == 'SC-CoT'].copy()
+
+    # Ensure we have comparable parameters (like N=3, N=5)
+    comparable_params = df_comp[df_comp['strategy_param'].str.contains(r'N=\d+', regex=True)]['strategy_param'].unique()
+    if len(comparable_params) < 2:
+        logger.info(f"Skipping SC '{metric}' comparison plot: Need results for at least two different N values (e.g., N=3 and N=5). Found: {comparable_params}")
+        return
+
+    # Keep only data with comparable N parameters
+    df_comp = df_comp[df_comp['strategy_param'].isin(comparable_params)].copy()
+
+    metric_title = metric.replace('_', ' ').title()
+    title = f'Self-Consistency CoT {metric_title}: Comparison by Samples (N)'
+
+    plt.figure(figsize=(10, 6))
+    ax = sns.barplot(data=df_comp, x='base_model_id', y='Value', hue='strategy_param',
+                     errorbar=None) # Add error bars if needed
+
+    # Add value labels
+    for container in ax.containers:
+        ax.bar_label(container, fmt='%.3f', fontsize=8, padding=3)
+
+    ax.set_xlabel("Base Model")
+    ax.set_ylabel(metric_title)
+    ax.set_title(title, loc='left', fontweight='bold') # Use rcParams size, add loc and fontweight
+
+    plt.xticks(rotation=45, ha='right', fontsize=8)
+    plt.yticks(fontsize=8)
+    plt.ylim(bottom=0)
+    if metric == 'accuracy' or metric == 'f1_score' or metric == 'precision' or metric == 'recall':
+         plt.ylim(top=max(1.05, df_comp['Value'].max() * 1.1 if not df_comp.empty else 1.05))
+    else:
+         plt.ylim(top=df_comp['Value'].max() * 1.15 if not df_comp.empty else None)
+
+    # Move legend outside
+    ax.legend(title='Samples (N)', bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0.)
+
+    sns.despine()
+    plt.tight_layout(rect=[0, 0, 0.85, 1]) # Adjust layout for legend
+
+    filename_base = f'comparison_sc_{metric}_n_samples'
+    output_path = Path(output_dir) / f'{filename_base}.png'
+    try:
+        plt.savefig(output_path, bbox_inches='tight')
+        plt.close()
+        logger.info(f"Saved plot: {output_path}")
+    except Exception as e:
+        logger.error(f"Failed to save plot {output_path}: {e}")
+        plt.close()
+# --- End SC Comparison Conversion ---
+
+
+# --- Convert Scatter Plot to Seaborn ---
+def _plot_scatter_tradeoff(df: pd.DataFrame, output_dir: Union[str, Path], metric_y: str, metric_x: str):
+    """Generates scatter plot showing a trade-off between two metrics using Seaborn."""
+    try:
+        df_pivot = df.pivot_table(index=['Model', 'Strategy'], columns='Metric', values='Value').reset_index()
+    except Exception as e:
+        logger.error(f"Failed to pivot DataFrame for scatter plot ({metric_y} vs {metric_x}): {e}. Columns: {df.columns}, Metrics: {df['Metric'].unique()}", exc_info=True)
+        return
+
+    if metric_x not in df_pivot.columns or metric_y not in df_pivot.columns:
+        logger.warning(f"Skipping {metric_y} vs {metric_x} plot: One or both metrics not found after pivoting. Available: {df_pivot.columns.tolist()}")
+        return
+
+    df_plot = df_pivot.dropna(subset=[metric_x, metric_y]).copy()
+    if df_plot.empty:
+        logger.warning(f"No data points with both '{metric_y}' and '{metric_x}' available for scatter plot.")
+        return
+
+    # Add strategy type for marker style and base model ID
+    df_plot['strategy_type'] = df_plot['Strategy'].apply(_get_strategy_type)
+    df_plot['base_model_id'] = df_plot['Model']
+
+    # Prepare titles and labels
+    metric_y_title = metric_y.replace('_', ' ').title()
+    metric_x_title = metric_x.replace('_', ' ').replace(' Ms', ' (ms)').replace(' S', ' (s)').title()
+    if metric_x == 'total_cost':
+        metric_x_title += " ($)"
+    title = f'{metric_y_title} vs. {metric_x_title} Trade-off'
+
+    plt.figure(figsize=(10, 6))
+    ax = sns.scatterplot(
+        data=df_plot,
+        x=metric_x,
+        y=metric_y,
+        hue='base_model_id',
+        style='strategy_type',
+        s=100, # Adjust marker size
+        alpha=0.8,
+        edgecolor='k', # Add marker edge color
+        linewidth=0.5
+    )
+
+    ax.set_xlabel(metric_x_title)
+    ax.set_ylabel(metric_y_title)
+    ax.set_title(title, loc='left', fontweight='bold')
+
+    # Adjust y-axis for accuracy-like metrics
+    if metric_y in ['accuracy', 'f1_score', 'precision', 'recall']:
+        min_y = df_plot[metric_y].min()
+        max_y = df_plot[metric_y].max()
+        ax.set_ylim(bottom=min_y * 0.95 if min_y > 0 else -0.05,
+                    top=max(1.0, max_y * 1.05) if max_y < 1 else max_y * 1.05)
+
+
+    # Move legend outside
+    ax.legend(title='Legend (Model / Strategy)', bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0.)
+
+    # Optionally add text labels (can get crowded)
+    # for i, point in df_plot.iterrows():
+    #     ax.text(point[metric_x] * 1.01, point[metric_y], f"{point['base_model_id']}", fontsize=7)
+
+    sns.despine()
+    plt.tight_layout(rect=[0, 0, 0.85, 1])
+
+    filename_base = f'tradeoff_{metric_y}_vs_{metric_x}'
+    output_path = Path(output_dir) / f'{filename_base}.png'
+    try:
+        plt.savefig(output_path, bbox_inches='tight')
+        plt.close()
+        logger.info(f"Saved plot: {output_path}")
+    except Exception as e:
+        logger.error(f"Failed to save plot {output_path}: {e}")
+        plt.close()
+# --- End Scatter Plot Conversion ---
+
+
+# --- Remove Goodfin Overrides from _plot_total_time_comparison ---
+def _plot_total_time_comparison(df: pd.DataFrame, output_dir: Union[str, Path]):
+    """Plots a comparison of average latency across models and strategies using Seaborn."""
+    time_df = df[df['Metric'] == 'average_latency_ms'].copy()
+    if time_df.empty:
+        logger.warning("No average latency data (average_latency_ms) found to plot time comparison.")
+        return
+
+    plt.figure(figsize=(12, 7))
+    num_models = time_df['Model'].nunique()
+    models = sorted(time_df['Model'].unique()) # Sort for consistent hue order
+
+    # Use the globally set Seaborn theme palette
+    ax = sns.barplot(data=time_df, x='Strategy', y='Value', hue='Model', hue_order=models,
+                     dodge=True, errorbar=None) # Rely on global theme
+
+    plt.title('Average Latency Comparison Across Strategies and Models', loc='left', fontweight='bold') # Use rcParams size, add loc and fontweight
+    plt.ylabel('Average Latency (ms)') # Use rcParams size
+    plt.xlabel('Strategy') # Use rcParams size
+    plt.xticks(rotation=30, ha='right') # Use rcParams size
+    plt.yticks() # Use rcParams size
+
+    # Move legend outside
+    legend = ax.legend(title='Model', bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0.)
+    # plt.setp(legend.get_title(), color=GOODFIN_TEXT_COLOR) # Remove Goodfin color
+    # plt.setp(legend.get_texts(), color=GOODFIN_MUTED_TEXT_COLOR) # Remove Goodfin color
+
+    # Add bar labels
+    for container in ax.containers:
+        labels = [f'{v:.0f}' if v >= 1 else f'{v:.3f}' for v in container.datavalues]
+        ax.bar_label(container, labels=labels, label_type='edge', padding=3,
+                     fontsize=plt.rcParams['xtick.labelsize'] - 1) # Use relative size
+
+    ax.set_ylim(bottom=0)
+    sns.despine() # Keep default despine (top/right)
+    plt.tight_layout(rect=[0, 0, 0.88, 1]) # Adjust rect for legend
+
+    output_path = Path(output_dir) / "average_latency_comparison.png"
+    try:
+        plt.savefig(output_path, bbox_inches='tight') # Use global DPI
+        plt.close()
+        logger.info(f"Saved plot: {output_path}")
+    except Exception as e:
+        logger.error(f"Failed to save plot {output_path}: {e}")
+        plt.close()
+# --- End Goodfin Override Removal ---
+
+
+# --- Remove Goodfin Overrides from _plot_metric_comparison_for_strategy ---
+def _plot_metric_comparison_for_strategy(df: pd.DataFrame, strategy_name: str, metrics_to_plot: list[str], output_dir: Union[str, Path]):
+    """
+    Generates separate bar charts comparing models for a specific strategy using Seaborn.
+    Args:
+        df: DataFrame containing the prepared plot data.
+        strategy_name: The specific strategy name to plot comparisons for.
+        metrics_to_plot: A list of metric names (strings) to generate plots for.
+        output_dir: The directory to save the generated plots.
+    """
+    strategy_df_full = df[df['Strategy'] == strategy_name].copy()
+    if strategy_df_full.empty:
+        logger.warning(f"No data found for strategy '{strategy_name}'. Skipping metric comparison plots.")
+        return
+
+    num_models = strategy_df_full['Model'].nunique()
+    if num_models == 0:
+        logger.info(f"No models found for strategy '{strategy_name}'. Skipping model comparison plots.")
+        return
+
+    models = sorted(strategy_df_full['Model'].unique()) # Sort for consistent x-axis order
+
+    for metric in metrics_to_plot:
+        metric_df = strategy_df_full[strategy_df_full['Metric'] == metric]
+        if metric_df.empty:
+            logger.warning(f"No data found for metric '{metric}' in strategy '{strategy_name}'. Skipping plot.")
+            continue
+
+        plt.figure(figsize=(max(6, num_models * 1.5), 5)) # Adjust width based on model count
+
+        ax = sns.barplot(data=metric_df, x='Model', y='Value', order=models,
+                         hue='Model', legend=False, # Use global palette
+                         errorbar=None) # Add errorbar if needed
+
+        metric_title = metric.replace('_', ' ').title()
+        # Add units for specific metrics
+        if metric == 'total_cost':
+            ylabel = f'{metric_title} ($)'
+            label_fmt = '${:,.3f}'
+        elif metric == 'average_latency_ms':
+            ylabel = f'{metric_title} (ms)'
+            label_fmt = '{:.0f}'
+        elif metric == 'total_run_time_s':
+            ylabel = f'{metric_title} (s)'
+            label_fmt = '{:.1f}s'
+        elif metric == 'total_tokens':
+            ylabel = f'{metric_title} (tokens)'
+            label_fmt = '{:,.0f}'
+        else:
+            ylabel = metric_title
+            label_fmt = '{:.3f}'
+
+        plot_title = f"{metric_title} for {strategy_name}"
+        
+        plt.title(plot_title, loc='left', fontweight='bold', wrap=True) # Add loc and fontweight
+        plt.ylabel(ylabel) # Use rcParams size
+        plt.xlabel('Model') # Use rcParams size
+        plt.xticks(rotation=45, ha="right", fontsize=plt.rcParams["xtick.labelsize"] * 0.9) # Keep rotation 0 if names fit, use rcParams size
+        plt.yticks() # Use rcParams size
+
+        # Add bar labels
+        for container in ax.containers:
+            labels = [label_fmt.format(v) for v in container.datavalues]
+            ax.bar_label(container, labels=labels,
+                         fontsize=plt.rcParams['xtick.labelsize'] -1, padding=3) # Relative size
+
+        # Set Y limits appropriately
+        if metric in ['accuracy', 'f1_score', 'precision', 'recall']:
+            ax.set_ylim(bottom=0, top=max(1.05, metric_df['Value'].max() * 1.1))
+        elif metric_df['Value'].min() >= 0:
+             ax.set_ylim(bottom=0, top=metric_df['Value'].max() * 1.15 if metric_df['Value'].max() > 0 else 0.1)
+        # else: keep default limits
+
+        if metric_df['Value'].max() == 0:
+             ax.set_ylim(bottom=-0.001, top=0.01)
+             ax.set_yticks([0])
+
+        # _wrap_labels(ax, width=15 if num_models > 5 else 20) # Wrap labels only if many models
+        sns.despine()
+        plt.tight_layout()
+
+        safe_strategy_name = strategy_name.replace(' ', '_').replace('(', '').replace(')', '').replace('=', '').replace('/', '')
+        output_path = Path(output_dir) / f"{safe_strategy_name}_strategy_{metric}_comparison.png"
+        try:
+            plt.savefig(output_path, bbox_inches='tight') # Use global DPI
+            plt.close()
+            logger.info(f"Saved plot: {output_path}")
+        except Exception as e:
+            logger.error(f"Failed to save plot {output_path}: {e}")
+            plt.close()
+# --- End Goodfin Override Removal ---
+
+
+def _plot_confusion_matrix(matrix: Union[np.ndarray, List[List[int]]], labels: List[str], model_id: str, strategy_name: str, output_dir: Union[str, Path]):
+    """Generates and saves a confusion matrix heatmap using Seaborn."""
+    output_path = Path(output_dir) / f"confusion_matrix_{model_id}_{strategy_name.replace(' ', '_')}.png"
+
+    if isinstance(matrix, list):
+        matrix = np.array(matrix)
+
+    if matrix.size == 0 or matrix.shape[0] != matrix.shape[1] or matrix.shape[0] != len(labels):
+        logger.error(f"Invalid matrix or labels for confusion matrix: {model_id}/{strategy_name}. Matrix shape: {matrix.shape}, Labels: {len(labels)}. Skipping plot.")
+        return
+
+    plt.figure(figsize=(8, 6))
+    ax = sns.heatmap(matrix, annot=True, fmt="d", cmap="Blues", # Use a standard cmap
+                xticklabels=labels, yticklabels=labels,
+                annot_kws={"size": 10})
+    plt.ylabel('Actual')
+    plt.xlabel('Predicted')
+    ax.set_title(f'Confusion Matrix: {model_id} ({strategy_name})', fontsize=12, loc='left', fontweight='bold') # add loc and fontweight
+    plt.xticks(rotation=45, ha='right', fontsize=8)
+    plt.yticks(rotation=0, fontsize=8)
+    plt.tight_layout()
+    try:
+        plt.savefig(output_path)
+        plt.close() # Close the figure
+        logger.info(f"Saved confusion matrix: {output_path}")
+    except Exception as e:
+        logger.error(f"Failed to save confusion matrix {output_path}: {e}")
+        plt.close()
+
+
+def generate_all_charts(all_model_run_summaries: dict, charts_output_dir: Union[str, Path]):
+    """
+    Generates all comparison charts based on the summary data using Matplotlib/Seaborn.
+
+    Args:
+        all_model_run_summaries: Dictionary containing metric summaries for different models and strategies.
+        charts_output_dir: The directory path to save the generated charts.
+    """
+    output_dir = Path(charts_output_dir) # Ensure it's a Path object
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    df = _prepare_plot_data(all_model_run_summaries)
+
+    if df is None or df.empty:
+        logger.warning("Plotting skipped: No valid data prepared from summaries.")
+        ui_utils.print_warning("Plotting skipped: No valid data prepared from summaries.")
+        return
+
+    # --- Generate Matplotlib/Seaborn Plots ---
+    logger.info("Generating plots using Matplotlib/Seaborn...")
+
+    # Define key metrics
+    primary_metric = 'accuracy'
+    latency_metric = 'average_latency_ms'
+    cost_metric = 'total_cost'
+
+    # 1. Key Strategy Comparison Plots (Bar)
+    key_metrics_for_strategy_comparison = [primary_metric, 'f1_score', latency_metric, cost_metric]
+    for metric in key_metrics_for_strategy_comparison:
+        logger.info(f"Generating strategy comparison plot for: {metric}")
+        _plot_metric_by_strategy_comparison(df, output_dir, metric)
+
+    # 2. SC-CoT N=3 vs N=5 Comparison (Bar)
+    logger.info("Generating SC-CoT N sample comparison plots...")
+    sc_metrics = [primary_metric, latency_metric, cost_metric]
+    for metric in sc_metrics:
+        _plot_sc_comparison(df, output_dir, metric=metric)
+
+
+    # 3. Trade-off Scatter Plots
+    logger.info("Generating trade-off scatter plots...")
+    _plot_scatter_tradeoff(df, output_dir, metric_y=primary_metric, metric_x=latency_metric) # Accuracy vs Latency
+    _plot_scatter_tradeoff(df, output_dir, metric_y=primary_metric, metric_x=cost_metric)    # Accuracy vs Cost
+    _plot_scatter_tradeoff(df, output_dir, metric_y=latency_metric, metric_x=cost_metric)   # Latency vs Cost
+
+
+    # 4. Total Time (Latency) Comparison (Bar)
+    logger.info("Generating average latency comparison plot...")
+    _plot_total_time_comparison(df, output_dir)
+
+
+    # 5. Per-Strategy Metric Comparison (Bar)
+    logger.info("Generating per-strategy metric comparison plots...")
+    all_strategies = df['Strategy'].unique()
+    metrics_per_strategy = [primary_metric, 'f1_score', latency_metric, cost_metric, 'total_tokens']
+    for strategy in all_strategies:
+         logger.debug(f"Generating plots for strategy: {strategy}")
+         # Filter metrics actually available for this strategy in the dataframe
+         available_metrics_for_strat = df[(df['Strategy'] == strategy) & (df['Metric'].isin(metrics_per_strategy))]['Metric'].unique()
+         if available_metrics_for_strat.size > 0:
+             _plot_metric_comparison_for_strategy(df, strategy, list(available_metrics_for_strat), output_dir)
+         else:
+             logger.debug(f"No relevant metrics found for strategy '{strategy}' to plot per-strategy comparison.")
+
+
+    # 6. Confusion Matrices (Heatmap - already converted)
+    logger.info("Generating confusion matrices...")
+    for model_id, strategies in all_model_run_summaries.items():
+        for strategy_name, results in strategies.items():
+            if isinstance(results, dict) and 'confusion_matrix' in results and 'labels' in results:
+                matrix = results['confusion_matrix']
+                labels = results['labels']
+                if matrix and labels: # Check if matrix and labels are not empty
+                     _plot_confusion_matrix(matrix, labels, model_id, strategy_name, output_dir)
+                else:
+                     logger.warning(f"Skipping confusion matrix for {model_id}/{strategy_name}: Empty matrix or labels.")
+            # else: # Don't log for every strategy that *doesn't* have a matrix
+            #     logger.debug(f"Confusion matrix data not found for {model_id}/{strategy_name}. Skipping matrix plot.")
+
+    logger.info("Finished generating Matplotlib/Seaborn plots.")
+
+    # --- TODO: Convert remaining Plotly functions or remove them ---
+    # The following plots still use Plotly and will retain the old style or fail if Plotly is removed.
+    # They need to be converted to Matplotlib/Seaborn or removed.
+
+    # Example: Placeholder for future conversion
+    # def _plot_sc_comparison_seaborn(...): ... # CONVERTED
+    # def _plot_time_vs_accuracy_seaborn(...): ... # CONVERTED via _plot_scatter_tradeoff
+    # def _plot_accuracy_vs_cost_seaborn(...): ... # CONVERTED via _plot_scatter_tradeoff
+    # def _plot_latency_vs_cost_seaborn(...): ... # CONVERTED via _plot_scatter_tradeoff
+    # ... etc ... # Other plots seem to be handled now.
 
 
 
