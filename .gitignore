@@ -14,7 +14,6 @@ deepseek_cfa_evaluation_results.json
 deepseek_eval.log
 run_deepseek_cfa_eval.py
 parse_mcq_options.py
-run_o3mini_openrouter_eval.py
 refs/
 paper_research_log.md
 .cursor/

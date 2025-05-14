@@ -105,7 +105,7 @@ def run_self_consistency_strategy(data: list[dict], model_config_item: dict, cot
     
     if 'max_tokens_cot' in sampling_params:
         sampling_params['max_tokens'] = sampling_params['max_tokens_cot']
-    elif model_config_item.get("type") != "bedrock" or "meta" not in model_config_item.get("model_id", ""):
+    elif 'max_tokens' not in sampling_params:
         sampling_params['max_tokens'] = 4000
     
     sampling_params.pop('response_format', None)

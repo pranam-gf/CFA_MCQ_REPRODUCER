@@ -104,9 +104,6 @@ CFA_MCQ_REPRODUCER/
     GEMINI_API_KEY="your_gemini_api_key"
     XAI_API_KEY="your_xai_api_key_for_grok"
     WRITER_API_KEY="your_writer_api_key"
-    AWS_ACCESS_KEY_ID="your_aws_access_key_id"
-    AWS_SECRET_ACCESS_KEY="your_aws_secret_access_key"
-    AWS_REGION="your_aws_region" # e.g., us-east-1
     GROQ_API_KEY="your_groq_api_key"
     ANTHROPIC_API_KEY="your_anthropic_api_key"
     ```
@@ -192,8 +189,6 @@ The program now includes several UI enhancements:
     - Groq (e.g., Llama 4 Maverick/Scout, Llama 3.3 70B, Llama 3.1 8B, with `reasoning_effort` for Grok models)
     - Writer.com (e.g., Palmyra-fin)
     - xAI (e.g., Grok-3)
-    - AWS Bedrock (various models like Deepseek, Mistral, Meta Llama)
-    - AWS SageMaker (custom deployed endpoints)
     Specific model IDs, versions, and their parameters are defined within the Python files in the `src/configs/` directory (e.g., `default_config.py`, `cot_config.py`).
 
 -   **Model Selection & Parameters:** Edit the configuration files within the `src/configs/` directory (e.g., `default_config.py`). These files list the available models (`config_id`), their corresponding API identifiers (`model_id`), types (`type` which maps to the correct API client in `llm_clients.py`), and strategy-specific parameters. You can add, remove, or modify entries here to control which models are available for selection and how they behave.

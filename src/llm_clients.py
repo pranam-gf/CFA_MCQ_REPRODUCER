@@ -5,7 +5,6 @@ import time
 import json
 import logging
 import re
-import boto3
 from openai import OpenAI, APIError, RateLimitError, APIConnectionError
 import google.generativeai as genai
 from writerai import Writer
@@ -50,22 +49,6 @@ def _estimate_tokens_tiktoken(text: str, encoding_name: str = "cl100k_base") -> 
         logger.warning(f"Could not estimate tokens using tiktoken (encoding: {encoding_name}): {e}")
         return None
 
-def _get_tokens_from_headers(headers: dict, input_key: str, output_key: str) -> tuple[int | None, int | None]:
-    """Safely extracts token counts from response headers."""
-    input_val_str = headers.get(input_key)
-    output_val_str = headers.get(output_key)
-    
-    input_t = None
-    if input_val_str and input_val_str.isdigit():
-        input_t = int(input_val_str)
-        
-    output_t = None
-    if output_val_str and output_val_str.isdigit():
-        output_t = int(output_val_str)
-    if input_t is not None and output_t is not None:
-        return input_t, output_t
-    return None, None
-
 def get_llm_response(prompt: str, model_config: dict, is_json_response_expected: bool = False) -> dict | None:
     """
     Sends a prompt to the specified LLM API and parses the response.
@@ -105,203 +88,7 @@ def get_llm_response(prompt: str, model_config: dict, is_json_response_expected:
     
     for attempt in range(MAX_RETRIES):
         try:
-            if model_type == "bedrock":
-                if not config.AWS_ACCESS_KEY_ID or not config.AWS_SECRET_ACCESS_KEY:
-                    logger.error(f"Missing AWS credentials for Bedrock model {config_id}.")
-                    return {"error_message": "Missing AWS credentials", "response_time": 0}
-                bedrock_client = boto3.client(
-                    service_name='bedrock-runtime',
-                    region_name=config.AWS_REGION,
-                    aws_access_key_id=config.AWS_ACCESS_KEY_ID,
-                    aws_secret_access_key=config.AWS_SECRET_ACCESS_KEY
-                )
-                accept = 'application/json'
-                contentType = 'application/json'
-
-                if "anthropic" in model_id:
-                    messages = [{"role": "user", "content": prompt}]
-                    body_params = {
-                        "messages": messages,
-                        "anthropic_version": parameters.get("anthropic_version", "bedrock-2023-05-31"),
-                        **{k: v for k, v in parameters.items() if k not in ["anthropic_version"]}
-                    }
-                    body_params.pop("response_format", None)
-                    body = json.dumps(body_params)
-
-                    model_identifier = model_config.get("inference_profile_arn") if model_config.get("use_inference_profile", False) else model_id
-                    api_response = bedrock_client.invoke_model(
-                        body=body, modelId=model_identifier, accept=accept, contentType=contentType
-                    )
-                    response_body = json.loads(api_response.get('body').read())
-                    response_text_for_error = response_body.get('content', [{}])[0].get('text', '')
-                    api_headers = api_response.get('ResponseMetadata', {}).get('HTTPHeaders', {})
-                    input_tokens, output_tokens = _get_tokens_from_headers(
-                        api_headers,
-                        'x-amzn-bedrock-input-token-count',
-                        'x-amzn-bedrock-output-token-count'
-                    )
-                    if input_tokens is None or output_tokens is None:
-                        logger.debug(f"Token counts not found/incomplete in headers for Bedrock Anthropic {config_id}. Trying response body.")
-                        usage_from_body = response_body.get('usage', {})
-                        input_tokens = usage_from_body.get('input_tokens')
-                        output_tokens = usage_from_body.get('output_tokens')
-                        if input_tokens is None or output_tokens is None:
-                            logger.warning(f"Token counts not found in body for Bedrock Anthropic {config_id}. Setting to None.")
-                        else:
-                            logger.debug(f"Retrieved token counts from headers for Bedrock Anthropic {config_id}.")
-
-                elif "mistral" in model_id or "meta" in model_id:
-                    bedrock_params = parameters.copy()
-                    bedrock_params.pop("response_format", None)
-
-                    if "meta" in model_id:  
-                        if 'max_tokens' in bedrock_params:
-                            max_tokens_value = bedrock_params.pop('max_tokens')
-                            if max_tokens_value:
-                                bedrock_params['max_gen_len'] = max_tokens_value
-                    
-                    body = json.dumps({"prompt": prompt, **bedrock_params})
-                    api_response = bedrock_client.invoke_model(
-                        body=body, modelId=model_id, accept=accept, contentType=contentType
-                    )
-                    response_body = json.loads(api_response.get('body').read())
-                    api_headers = api_response.get('ResponseMetadata', {}).get('HTTPHeaders', {})
-
-                    if "mistral" in model_id:
-                        response_text_for_error = response_body.get('outputs', [{}])[0].get('text', '')
-                        input_tokens, output_tokens = _get_tokens_from_headers(
-                            api_headers,
-                            'x-amzn-bedrock-input-token-count',
-                            'x-amzn-bedrock-output-token-count' 
-                        )
-                        if input_tokens is None or output_tokens is None:
-                            logger.debug(f"Token counts not found/incomplete in headers for Bedrock Mistral {config_id}. Trying response body.")
-                            usage_from_body = response_body.get('usage', {})
-                            input_tokens = usage_from_body.get('prompt_token_count') 
-                            output_tokens = usage_from_body.get('completion_token_count') 
-                            if input_tokens is None or output_tokens is None: 
-                                input_tokens = usage_from_body.get('input_tokens')
-                                output_tokens = usage_from_body.get('output_tokens')
-                            if input_tokens is None or output_tokens is None:
-                                 logger.warning(f"Token counts not found in body for Bedrock Mistral {config_id}. Setting to None.")
-                        else:
-                            logger.debug(f"Retrieved token counts from headers for Bedrock Mistral {config_id}.")
-
-                    elif "meta" in model_id:
-                        response_text_for_error = response_body.get('generation', '')
-                        input_tokens, output_tokens = _get_tokens_from_headers(
-                            api_headers,
-                            'x-amzn-bedrock-input-token-count',
-                            'x-amzn-bedrock-output-token-count'
-                        )
-                        if input_tokens is None or output_tokens is None:
-                            logger.debug(f"Token counts not found/incomplete in headers for Bedrock Meta {config_id}. Trying response body.")
-                            input_tokens = response_body.get('prompt_token_count')
-                            output_tokens = response_body.get('generation_token_count') 
-                            if input_tokens is None or output_tokens is None: 
-                                usage_from_body = response_body.get('usage', {})
-                                input_tokens = usage_from_body.get('input_tokens')
-                                output_tokens = usage_from_body.get('output_tokens')
-                            if input_tokens is None or output_tokens is None:
-                                logger.warning(f"Token counts not found in body for Bedrock Meta {config_id}. Setting to None.")
-                        else:
-                            logger.debug(f"Retrieved token counts from headers for Bedrock Meta {config_id}.")
-                
-                else:
-                    logger.error(f"Unsupported Bedrock model provider for {config_id}")
-                    return {"error_message": f"Unsupported Bedrock model: {config_id}", "response_time": 0}
-
-            elif model_type == "anthropic": 
-                if not config.ANTHROPIC_API_KEY:
-                    logger.error(f"Missing Anthropic API key for model {config_id}.")
-                    return {"error_message": "Missing Anthropic API key", "response_time": 0}
-                
-                anthropic_client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
-                
-                anthropic_params = parameters.copy()
-                
-                
-                anthropic_params.pop('response_format', None) 
-                
-                
-                
-                if 'max_tokens' not in anthropic_params:
-                    anthropic_params['max_tokens'] = 4096 
-                    logger.warning(f"'max_tokens' not specified for Anthropic model {config_id}, defaulting to {anthropic_params['max_tokens']}.")
-
-                try:
-                    api_response = anthropic_client.messages.create(
-                        model=model_id,
-                        messages=[{"role": "user", "content": prompt}],
-                        **anthropic_params
-                    )
-                    response_text_for_error = api_response.content[0].text if api_response.content else ""
-                    
-                    if api_response.usage:
-                        input_tokens = api_response.usage.input_tokens
-                        output_tokens = api_response.usage.output_tokens
-                    else:
-                        logger.warning(f"Token usage data not found in Anthropic response for {config_id}. Setting to None.")
-
-                except anthropic.APIStatusError as e:
-                    elapsed_time = time.time() - start_time
-                    logger.error(f"Anthropic API Status Error for {config_id} after {elapsed_time:.2f}s: {e.status_code} - {e.message}. Raw response snippet: {response_text_for_error[:100]}...")
-                    error_details = {"type": "APIStatusError", "message": str(e.message), "status_code": e.status_code}
-                    if hasattr(e, 'response') and e.response and hasattr(e.response, 'text'):
-                         error_details["body"] = e.response.text[:500] 
-                    return {"error_message": f"Anthropic API Status Error: {e.status_code} - {e.message}", "response_time": elapsed_time, "details": error_details, "raw_response_text": response_text_for_error}
-                except anthropic.APIConnectionError as e:
-                    elapsed_time = time.time() - start_time
-                    logger.error(f"Anthropic API Connection Error for {config_id} after {elapsed_time:.2f}s: {e}. Raw response snippet: {response_text_for_error[:100]}...")
-                    return {"error_message": f"Anthropic API Connection Error: {str(e)}", "response_time": elapsed_time, "details": {"type": "APIConnectionError"}, "raw_response_text": response_text_for_error}
-                except anthropic.RateLimitError as e:
-                    elapsed_time = time.time() - start_time
-                    logger.error(f"Anthropic Rate Limit Error for {config_id} after {elapsed_time:.2f}s: {e}. Raw response snippet: {response_text_for_error[:100]}...")
-                    return {"error_message": f"Anthropic Rate Limit Error: {str(e)}", "response_time": elapsed_time, "details": {"type": "RateLimitError"}, "raw_response_text": response_text_for_error}
-                except anthropic.APIError as e: 
-                    elapsed_time = time.time() - start_time
-                    logger.error(f"Anthropic API Error for {config_id} after {elapsed_time:.2f}s: {e}. Raw response snippet: {response_text_for_error[:100]}...")
-                    error_details = {"type": "APIError", "message": str(e)}
-                    if hasattr(e, 'status_code'): 
-                        error_details["status_code"] = e.status_code
-                    if hasattr(e, 'body') and e.body: 
-                         error_details["body"] = str(e.body)[:500]
-                    return {"error_message": f"Anthropic API Error: {str(e)}", "response_time": elapsed_time, "details": error_details, "raw_response_text": response_text_for_error}
-
-            elif model_type == "mistral_official": 
-                if not config.MISTRAL_API_KEY:
-                    logger.error(f"Missing Mistral API key for model {config_id}.")
-                    return {"error_message": "Missing Mistral API key", "response_time": 0}
-                
-                mistral_client = MistralClient(api_key=config.MISTRAL_API_KEY)
-                
-                mistral_params = parameters.copy()
-                mistral_params.pop('response_format', None) 
-
-                try:
-                    
-                    
-                    
-                    chat_response = mistral_client.chat(
-                        model=model_id,
-                        messages=[{"role": "user", "content": prompt}],
-                        **mistral_params
-                    )
-                    response_text_for_error = chat_response.choices[0].message.content if chat_response.choices else ""
-                    
-                    if chat_response.usage:
-                        input_tokens = chat_response.usage.prompt_tokens
-                        output_tokens = chat_response.usage.completion_tokens
-                    else:
-                        logger.warning(f"Token usage data not found in Mistral response for {config_id}. Setting to None.")
-
-                except Exception as e: 
-                    elapsed_time = time.time() - start_time
-                    logger.error(f"Mistral API Error for {config_id} after {elapsed_time:.2f}s: {e}. Raw response snippet: {response_text_for_error[:100]}...")
-                    error_details = {"type": "MistralAPIError", "message": str(e)}
-                    return {"error_message": f"Mistral API Error: {str(e)}", "response_time": elapsed_time, "details": error_details, "raw_response_text": response_text_for_error}
-
-            elif model_type == "openai":
+            if model_type == "openai":
                 if not config.OPENAI_API_KEY:
                     logger.error(f"Missing OpenAI API key for model {config_id}.")
                     return {"error_message": "Missing OpenAI API key", "response_time": 0}
@@ -608,53 +395,89 @@ def get_llm_response(prompt: str, model_config: dict, is_json_response_expected:
                 else:
                     logger.warning(f"Groq token count not found in usage object for {config_id}. Setting to None.")
 
-            elif model_type == "sagemaker":
-                if not config.AWS_ACCESS_KEY_ID or not config.AWS_SECRET_ACCESS_KEY:
-                    logger.error(f"Missing AWS credentials for SageMaker model {config_id}.")
-                    return {"error_message": "Missing AWS credentials", "response_time": 0}
-                sagemaker_client = boto3.client(
-                    service_name='sagemaker-runtime',
-                    region_name=config.AWS_REGION,
-                    aws_access_key_id=config.AWS_ACCESS_KEY_ID,
-                    aws_secret_access_key=config.AWS_SECRET_ACCESS_KEY
-                )
-                sagemaker_params = parameters.copy()
-                sagemaker_params.pop('response_format', None)
-
-                body_payload = {"inputs": prompt, "parameters": sagemaker_params}
-                body = json.dumps(body_payload)
-                endpoint_name = model_id
+            elif model_type == "mistral_official":
+                if not config.MISTRAL_API_KEY:
+                    logger.error(f"Missing Mistral API key for model {config_id}.")
+                    return {"error_message": "Missing Mistral API key", "response_time": 0}
+                mistral_client = MistralClient(api_key=config.MISTRAL_API_KEY)
                 
-                api_response = sagemaker_client.invoke_endpoint(
-                    EndpointName=endpoint_name,
-                    ContentType='application/json',
-                    Body=body
-                )
-                response_body_bytes = api_response['Body'].read()
-                try:
-                    response_body_str = response_body_bytes.decode('utf-8')
-                    response_body = json.loads(response_body_str)
-                    if isinstance(response_body, list) and len(response_body) > 0 and isinstance(response_body[0], dict):
-                        response_text_for_error = response_body[0].get('generated_text', str(response_body[0]))
-                    elif isinstance(response_body, dict):
-                        response_text_for_error = response_body.get('generated_text', 
-                                                                   response_body.get('text', 
-                                                                   response_body.get('answer', 
-                                                                   response_body.get('completion', 
-                                                                   response_body.get('generation', str(response_body))))))
-                    else:
-                        response_text_for_error = str(response_body)
-                except (json.JSONDecodeError, UnicodeDecodeError) as decode_err:
-                    logger.error(f"SageMaker response for {config_id} was not valid JSON or UTF-8: {decode_err}. Raw bytes: {response_body_bytes[:100]}")
-                    response_text_for_error = response_body_bytes.decode('latin-1', errors='replace')
+                mistral_params = parameters.copy()
+                # Mistral API does not support response_format in the same way as OpenAI for Chat Completions
+                mistral_params.pop('response_format', None)
 
-                input_tokens = None
-                output_tokens = None
-                logger.warning(
-                    f"SageMaker token count is not reliably available. Token counts for {config_id} will be 'None'."
+                api_response = mistral_client.chat(
+                    model=model_id,
+                    messages=[anthropic.types.MessageParam(role="user", content=prompt)], # Using anthropic type for messages for now
+                    **mistral_params
                 )
+                response_text_for_error = api_response.choices[0].message.content.strip() if api_response.choices and api_response.choices[0].message else ""
+                if hasattr(api_response, 'usage') and api_response.usage:
+                    input_tokens = api_response.usage.prompt_tokens
+                    output_tokens = api_response.usage.completion_tokens
+                else:
+                    logger.warning(f"Mistral token count not found in usage object for {config_id}. Estimating.")
+                    input_tokens = _estimate_tokens_tiktoken(prompt) 
+                    output_tokens = _estimate_tokens_tiktoken(response_text_for_error)
+
+            elif model_type == "anthropic":
+                if not config.ANTHROPIC_API_KEY:
+                    logger.error(f"Missing Anthropic API key for model {config_id}.")
+                    return {"error_message": "Missing Anthropic API key", "response_time": 0}
+                
+                anthropic_client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
+                
+                anthropic_params = parameters.copy()
+                
+                
+                anthropic_params.pop('response_format', None) 
+                
+                
+                
+                if 'max_tokens' not in anthropic_params:
+                    anthropic_params['max_tokens'] = 4096 
+                    logger.warning(f"'max_tokens' not specified for Anthropic model {config_id}, defaulting to {anthropic_params['max_tokens']}.")
+
+                try:
+                    api_response = anthropic_client.messages.create(
+                        model=model_id,
+                        messages=[{"role": "user", "content": prompt}],
+                        **anthropic_params
+                    )
+                    response_text_for_error = api_response.content[0].text if api_response.content else ""
+                    
+                    if api_response.usage:
+                        input_tokens = api_response.usage.input_tokens
+                        output_tokens = api_response.usage.output_tokens
+                    else:
+                        logger.warning(f"Token usage data not found in Anthropic response for {config_id}. Setting to None.")
+
+                except anthropic.APIStatusError as e:
+                    elapsed_time = time.time() - start_time
+                    logger.error(f"Anthropic API Status Error for {config_id} after {elapsed_time:.2f}s: {e.status_code} - {e.message}. Raw response snippet: {response_text_for_error[:100]}...")
+                    error_details = {"type": "APIStatusError", "message": str(e.message), "status_code": e.status_code}
+                    if hasattr(e, 'response') and e.response and hasattr(e.response, 'text'):
+                         error_details["body"] = e.response.text[:500] 
+                    return {"error_message": f"Anthropic API Status Error: {e.status_code} - {e.message}", "response_time": elapsed_time, "details": error_details, "raw_response_text": response_text_for_error}
+                except anthropic.APIConnectionError as e:
+                    elapsed_time = time.time() - start_time
+                    logger.error(f"Anthropic API Connection Error for {config_id} after {elapsed_time:.2f}s: {e}. Raw response snippet: {response_text_for_error[:100]}...")
+                    return {"error_message": f"Anthropic API Connection Error: {str(e)}", "response_time": elapsed_time, "details": {"type": "APIConnectionError"}, "raw_response_text": response_text_for_error}
+                except anthropic.RateLimitError as e:
+                    elapsed_time = time.time() - start_time
+                    logger.error(f"Anthropic Rate Limit Error for {config_id} after {elapsed_time:.2f}s: {e}. Raw response snippet: {response_text_for_error[:100]}...")
+                    return {"error_message": f"Anthropic Rate Limit Error: {str(e)}", "response_time": elapsed_time, "details": {"type": "RateLimitError"}, "raw_response_text": response_text_for_error}
+                except anthropic.APIError as e: 
+                    elapsed_time = time.time() - start_time
+                    logger.error(f"Anthropic API Error for {config_id} after {elapsed_time:.2f}s: {e}. Raw response snippet: {response_text_for_error[:100]}...")
+                    error_details = {"type": "APIError", "message": str(e)}
+                    if hasattr(e, 'status_code'): 
+                        error_details["status_code"] = e.status_code
+                    if hasattr(e, 'body') and e.body: 
+                         error_details["body"] = str(e.body)[:500]
+                    return {"error_message": f"Anthropic API Error: {str(e)}", "response_time": elapsed_time, "details": error_details, "raw_response_text": response_text_for_error}
+
             else:
-                logger.error(f"Unsupported model type: {model_type} for model {config_id}")
+                logger.error(f"Unsupported model type: {model_type} for {config_id}")
                 return {"error_message": f"Unsupported model type: {model_type}", "response_time": 0}
 
             elapsed_time = time.time() - start_time
