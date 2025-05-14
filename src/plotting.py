@@ -137,7 +137,7 @@ def _prepare_plot_data(all_model_run_summaries: dict) -> pd.DataFrame | None:
 
 def _get_strategy_type(strategy_name: str) -> str:
     """Extracts the base strategy type from the full strategy name."""
-    if "Self-Consistency" in strategy_name:
+    if "Self-Consistency CoT" in strategy_name:
         return "SC-CoT"
     elif "Self-Discover" in strategy_name:
         return "Self-Discover"
@@ -226,34 +226,21 @@ def _plot_metric_by_strategy_comparison(df: pd.DataFrame, output_dir: Union[str,
 
     ax.set_xlabel("Model") 
     ax.set_ylabel(metric_title) 
-    
-    
     ax.set_title(title, fontsize=plt.rcParams["axes.titlesize"], pad=plt.rcParams["axes.titlepad"], loc='left', fontweight='bold')
-
-    
     ax.yaxis.grid(True, linestyle='-', linewidth=0.5, alpha=0.7, color='lightgray')
     ax.set_axisbelow(True)
-
-    
     if metric.lower() in ['accuracy', 'f1_score', 'precision', 'recall'] or \
        'rate' in metric.lower() or 'percentage' in metric.lower() or 'score' in metric.lower():
         current_max_val = df_comp['Value'].max() if not df_comp.empty else 1.0
         current_min_val = df_comp['Value'].min() if not df_comp.empty else 0.0
-        
-        
         plot_min_y = 0 if current_min_val >= 0 else current_min_val * 1.1 
-
-        
         if metric.lower() in ['accuracy', 'f1_score', 'precision', 'recall']:
-            
             plot_max_y = max(1.05, current_max_val * 1.05 if current_max_val > 0 else 1.05)
         else:
             plot_max_y = current_max_val * 1.1 if current_max_val > 0 else 0.1 
-            if current_max_val == 0 and current_min_val == 0 : plot_max_y = 0.1 
-        
+            if current_max_val == 0 and current_min_val == 0 : plot_max_y = 0.1   
         ax.set_ylim(bottom=plot_min_y, top=plot_max_y)
     else:
-        
         if not df_comp.empty and df_comp['Value'].min() >= 0:
             ax.set_ylim(bottom=0, top=df_comp['Value'].max() * 1.1 if df_comp['Value'].max() > 0 else None)
         elif not df_comp.empty:
@@ -261,23 +248,16 @@ def _plot_metric_by_strategy_comparison(df: pd.DataFrame, output_dir: Union[str,
 
     
     plt.legend(title='Strategy', bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0.)
-    
-    
     plt.xticks(rotation=45, ha="right", fontsize=plt.rcParams["xtick.labelsize"] * 0.9) 
-
     sns.despine(ax=ax, top=True, right=True, left=False, bottom=False, trim=False) 
-
     plt.tight_layout(rect=[0, 0, 0.85, 1]) 
     
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
-    
-    
     chart_filename = output_path / f"comparison_{metric.lower()}_by_model_and_strategy.png" 
     plt.savefig(chart_filename, dpi=plt.rcParams["savefig.dpi"], bbox_inches='tight')
     plt.close()
     logger.info(f"Saved chart: {chart_filename}")
-
 
 def _plot_sc_comparison(df: pd.DataFrame, output_dir: Union[str, Path], metric: str = 'accuracy'):
     """Generates grouped bar chart comparing SC-CoT N=3 vs N=5 using Seaborn."""
@@ -285,38 +265,25 @@ def _plot_sc_comparison(df: pd.DataFrame, output_dir: Union[str, Path], metric: 
     if metric_df.empty:
         logger.info(f"Skipping SC '{metric}' comparison plot: No data found for this metric.")
         return
-
     metric_df['strategy_type'] = metric_df['Strategy'].apply(_get_strategy_type)
     metric_df['strategy_param'] = metric_df['Strategy'].apply(_get_strategy_param)
     metric_df['base_model_id'] = metric_df['Model']
-
-    
     df_comp = metric_df[metric_df['strategy_type'] == 'SC-CoT'].copy()
-
-    
     comparable_params = df_comp[df_comp['strategy_param'].str.contains(r'N=\d+', regex=True)]['strategy_param'].unique()
     if len(comparable_params) < 2:
         logger.info(f"Skipping SC '{metric}' comparison plot: Need results for at least two different N values (e.g., N=3 and N=5). Found: {comparable_params}")
         return
-
-    
     df_comp = df_comp[df_comp['strategy_param'].isin(comparable_params)].copy()
-
     metric_title = metric.replace('_', ' ').title()
     title = f'Self-Consistency CoT {metric_title}: Comparison by Samples (N)'
-
     plt.figure(figsize=(10, 6))
     ax = sns.barplot(data=df_comp, x='base_model_id', y='Value', hue='strategy_param',
                      errorbar=None) 
-
-    
     for container in ax.containers:
         ax.bar_label(container, fmt='%.3f', fontsize=8, padding=3)
-
     ax.set_xlabel("Base Model")
     ax.set_ylabel(metric_title)
     ax.set_title(title, loc='left', fontweight='bold') 
-
     plt.xticks(rotation=45, ha='right', fontsize=8)
     plt.yticks(fontsize=8)
     plt.ylim(bottom=0)
@@ -324,13 +291,9 @@ def _plot_sc_comparison(df: pd.DataFrame, output_dir: Union[str, Path], metric: 
          plt.ylim(top=max(1.05, df_comp['Value'].max() * 1.1 if not df_comp.empty else 1.05))
     else:
          plt.ylim(top=df_comp['Value'].max() * 1.15 if not df_comp.empty else None)
-
-    
     ax.legend(title='Samples (N)', bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0.)
-
     sns.despine()
     plt.tight_layout(rect=[0, 0, 0.85, 1]) 
-
     filename_base = f'comparison_sc_{metric}_n_samples'
     output_path = Path(output_dir) / f'{filename_base}.png'
     try:
@@ -341,11 +304,9 @@ def _plot_sc_comparison(df: pd.DataFrame, output_dir: Union[str, Path], metric: 
         logger.error(f"Failed to save plot {output_path}: {e}")
         plt.close()
 
-
-
-
 def _plot_scatter_tradeoff(df: pd.DataFrame, output_dir: Union[str, Path], metric_y: str, metric_x: str):
     """Generates scatter plot showing a trade-off between two metrics using Seaborn."""
+    
     try:
         df_pivot = df.pivot_table(index=['Model', 'Strategy'], columns='Metric', values='Value').reset_index()
     except Exception as e:
@@ -361,17 +322,13 @@ def _plot_scatter_tradeoff(df: pd.DataFrame, output_dir: Union[str, Path], metri
         logger.warning(f"No data points with both '{metric_y}' and '{metric_x}' available for scatter plot.")
         return
 
-    
     df_plot['strategy_type'] = df_plot['Strategy'].apply(_get_strategy_type)
     df_plot['base_model_id'] = df_plot['Model']
-
-    
     metric_y_title = metric_y.replace('_', ' ').title()
     metric_x_title = metric_x.replace('_', ' ').replace(' Ms', ' (ms)').replace(' S', ' (s)').title()
     if metric_x == 'total_cost':
         metric_x_title += " ($)"
     title = f'{metric_y_title} vs. {metric_x_title} Trade-off'
-
     plt.figure(figsize=(10, 6))
     ax = sns.scatterplot(
         data=df_plot,
@@ -388,25 +345,16 @@ def _plot_scatter_tradeoff(df: pd.DataFrame, output_dir: Union[str, Path], metri
     ax.set_xlabel(metric_x_title)
     ax.set_ylabel(metric_y_title)
     ax.set_title(title, loc='left', fontweight='bold')
-
-    
     if metric_y in ['accuracy', 'f1_score', 'precision', 'recall']:
         min_y = df_plot[metric_y].min()
         max_y = df_plot[metric_y].max()
         ax.set_ylim(bottom=min_y * 0.95 if min_y > 0 else -0.05,
                     top=max(1.0, max_y * 1.05) if max_y < 1 else max_y * 1.05)
-
-
     
     ax.legend(title='Legend (Model / Strategy)', bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0.)
-
     
-    
-    
-
     sns.despine()
     plt.tight_layout(rect=[0, 0, 0.85, 1])
-
     filename_base = f'tradeoff_{metric_y}_vs_{metric_x}'
     output_path = Path(output_dir) / f'{filename_base}.png'
     try:
@@ -416,9 +364,6 @@ def _plot_scatter_tradeoff(df: pd.DataFrame, output_dir: Union[str, Path], metri
     except Exception as e:
         logger.error(f"Failed to save plot {output_path}: {e}")
         plt.close()
-
-
-
 
 def _plot_total_time_comparison(df: pd.DataFrame, output_dir: Union[str, Path]):
     """Plots a comparison of average latency across models and strategies using Seaborn."""
@@ -430,7 +375,6 @@ def _plot_total_time_comparison(df: pd.DataFrame, output_dir: Union[str, Path]):
     plt.figure(figsize=(12, 7))
     num_models = time_df['Model'].nunique()
     models = sorted(time_df['Model'].unique()) 
-
     
     ax = sns.barplot(data=time_df, x='Strategy', y='Value', hue='Model', hue_order=models,
                      dodge=True, errorbar=None) 
@@ -441,17 +385,12 @@ def _plot_total_time_comparison(df: pd.DataFrame, output_dir: Union[str, Path]):
     plt.xticks(rotation=30, ha='right') 
     plt.yticks() 
 
-    
     legend = ax.legend(title='Model', bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0.)
-    
-    
 
-    
     for container in ax.containers:
         labels = [f'{v:.0f}' if v >= 1 else f'{v:.3f}' for v in container.datavalues]
         ax.bar_label(container, labels=labels, label_type='edge', padding=3,
                      fontsize=plt.rcParams['xtick.labelsize'] - 1) 
-
     ax.set_ylim(bottom=0)
     sns.despine() 
     plt.tight_layout(rect=[0, 0, 0.88, 1]) 
@@ -464,9 +403,6 @@ def _plot_total_time_comparison(df: pd.DataFrame, output_dir: Union[str, Path]):
     except Exception as e:
         logger.error(f"Failed to save plot {output_path}: {e}")
         plt.close()
-
-
-
 
 def _plot_metric_comparison_for_strategy(df: pd.DataFrame, strategy_name: str, metrics_to_plot: list[str], output_dir: Union[str, Path]):
     """
@@ -526,24 +462,20 @@ def _plot_metric_comparison_for_strategy(df: pd.DataFrame, strategy_name: str, m
         plt.xlabel('Model') 
         plt.xticks(rotation=45, ha="right", fontsize=plt.rcParams["xtick.labelsize"] * 0.9) 
         plt.yticks() 
-
         
         for container in ax.containers:
             labels = [label_fmt.format(v) for v in container.datavalues]
             ax.bar_label(container, labels=labels,
                          fontsize=plt.rcParams['xtick.labelsize'] -1, padding=3) 
-
-        
+ 
         if metric in ['accuracy', 'f1_score', 'precision', 'recall']:
             ax.set_ylim(bottom=0, top=max(1.05, metric_df['Value'].max() * 1.1))
         elif metric_df['Value'].min() >= 0:
              ax.set_ylim(bottom=0, top=metric_df['Value'].max() * 1.15 if metric_df['Value'].max() > 0 else 0.1)
-        
 
         if metric_df['Value'].max() == 0:
              ax.set_ylim(bottom=-0.001, top=0.01)
              ax.set_yticks([0])
-
         
         sns.despine()
         plt.tight_layout()
@@ -557,8 +489,6 @@ def _plot_metric_comparison_for_strategy(df: pd.DataFrame, strategy_name: str, m
         except Exception as e:
             logger.error(f"Failed to save plot {output_path}: {e}")
             plt.close()
-
-
 
 def _plot_confusion_matrix(matrix: Union[np.ndarray, List[List[int]]], labels: List[str], model_id: str, strategy_name: str, output_dir: Union[str, Path]):
     """Generates and saves a confusion matrix heatmap using Seaborn."""
@@ -581,6 +511,7 @@ def _plot_confusion_matrix(matrix: Union[np.ndarray, List[List[int]]], labels: L
     plt.xticks(rotation=45, ha='right', fontsize=8)
     plt.yticks(rotation=0, fontsize=8)
     plt.tight_layout()
+
     try:
         plt.savefig(output_path)
         plt.close() 
@@ -589,73 +520,150 @@ def _plot_confusion_matrix(matrix: Union[np.ndarray, List[List[int]]], labels: L
         logger.error(f"Failed to save confusion matrix {output_path}: {e}")
         plt.close()
 
+def save_summary_metrics_to_csv(all_model_run_summaries: dict, results_output_dir: Union[str, Path]):
+    """
+    Saves the aggregated summary of all metrics to a CSV file.
+
+    Args:
+        all_model_run_summaries: Dictionary containing summaries of model runs.
+        results_output_dir: Path to the directory where the CSV should be saved.
+    """
+    if not all_model_run_summaries:
+        logger.warning("No model run summaries provided. Skipping CSV generation.")
+        return
+
+    summary_data_list = []
+    for base_model_id, strategies_data in all_model_run_summaries.items():
+        if not isinstance(strategies_data, dict):
+            logger.warning(f"Expected dict for strategies_data for model '{base_model_id}', got {type(strategies_data)}. Skipping.")
+            continue
+            
+        for strategy_name_full, metrics in strategies_data.items():
+            if not isinstance(metrics, dict):
+                logger.warning(f"Expected dict for metrics for model '{base_model_id}' strategy '{strategy_name_full}', got {type(metrics)}. Skipping.")
+                continue
+
+            if "error" in metrics:
+                logger.info(f"Skipping errored run for CSV: {base_model_id} - {strategy_name_full}")
+                continue
+
+            run_id = f"{base_model_id}__{strategy_name_full.replace(' ', '_').replace('(', '').replace(')', '').replace('=', '')}"
+            model_id_full = metrics.get("config_id_used", base_model_id) 
+            
+            strategy_type = _get_strategy_type(strategy_name_full)
+            strategy_param_val = _get_strategy_param(strategy_name_full)
+            
+            display_name_parts = [base_model_id, strategy_type]
+            if strategy_param_val:
+                display_name_parts.append(strategy_param_val)
+            display_name = " - ".join(display_name_parts)
+
+            row = {
+                "run_id": run_id,
+                "model_id_full": model_id_full,
+                "base_model_id": base_model_id,
+                "strategy_name": strategy_name_full,
+                "strategy_type": strategy_type,
+                "strategy_param": strategy_param_val,
+                "display_name": display_name,
+                "accuracy": metrics.get("accuracy"),
+                "f1_score": metrics.get("f1_score"),
+                "precision": metrics.get("precision"), 
+                "recall": metrics.get("recall"),       
+                "avg_time_per_question_ms": metrics.get("average_latency_ms"),
+                "total_run_time_s": metrics.get("total_run_time_s"),
+                "total_input_tokens": metrics.get("total_input_tokens"), 
+                "total_output_tokens": metrics.get("total_output_tokens"),
+                "total_tokens": metrics.get("total_tokens"),             
+                "avg_answer_length": metrics.get("avg_answer_length"),   
+                "total_cost": metrics.get("total_cost"),
+                "num_processed": metrics.get("num_processed") 
+            }
+            summary_data_list.append(row)
+
+    if not summary_data_list:
+        logger.warning("No valid data to save to CSV after processing summaries.")
+        return
+
+    summary_df = pd.DataFrame(summary_data_list)
+    
+    ordered_columns = [
+        "run_id", "model_id_full", "base_model_id", "display_name", 
+        "strategy_name", "strategy_type", "strategy_param",
+        "accuracy", "f1_score", "precision", "recall", 
+        "avg_time_per_question_ms", "total_run_time_s",
+        "total_input_tokens", "total_output_tokens", "total_tokens",
+        "avg_answer_length", "total_cost", "num_processed"
+    ]
+    for col in ordered_columns:
+        if col not in summary_df.columns:
+            summary_df[col] = pd.NA 
+            
+    summary_df = summary_df[ordered_columns]
+    results_dir = Path(results_output_dir)
+    results_dir.mkdir(parents=True, exist_ok=True)
+    csv_file_path = results_dir / "all_runs_summary_metrics.csv"
+    
+    try:
+        summary_df.to_csv(csv_file_path, index=False, encoding='utf-8')
+        logger.info(f"Successfully saved summary metrics to {csv_file_path}")
+        ui_utils.print_success(f"Aggregated metrics summary saved to: {csv_file_path}")
+    except Exception as e:
+        logger.error(f"Failed to save summary metrics CSV to {csv_file_path}: {e}", exc_info=True)
+        ui_utils.print_error(f"Failed to save summary metrics CSV: {e}")
 
 def generate_all_charts(all_model_run_summaries: dict, charts_output_dir: Union[str, Path]):
     """
-    Generates all comparison charts based on the summary data using Matplotlib/Seaborn.
-
-    Args:
-        all_model_run_summaries: Dictionary containing metric summaries for different models and strategies.
-        charts_output_dir: The directory path to save the generated charts.
+    Generates all specified charts and saves them to the output directory.
+    Also saves the aggregated summary metrics to a CSV file in the parent results directory.
     """
-    output_dir = Path(charts_output_dir) 
-    output_dir.mkdir(parents=True, exist_ok=True)
+    logger.info(f"Starting chart generation. Output directory: {charts_output_dir}")
+    print(f"Starting chart generation. Output directory: {charts_output_dir}")
+    
+    charts_dir = Path(charts_output_dir)
+    charts_dir.mkdir(parents=True, exist_ok=True)
+    results_dir = charts_dir.parent 
+    save_summary_metrics_to_csv(all_model_run_summaries, results_dir)
+    plot_df = _prepare_plot_data(all_model_run_summaries)
 
-    df = _prepare_plot_data(all_model_run_summaries)
-
-    if df is None or df.empty:
+    if plot_df is None or plot_df.empty:
         logger.warning("Plotting skipped: No valid data prepared from summaries.")
         ui_utils.print_warning("Plotting skipped: No valid data prepared from summaries.")
         return
-
     
     logger.info("Generating plots using Matplotlib/Seaborn...")
-
-    
     primary_metric = 'accuracy'
     latency_metric = 'average_latency_ms'
     cost_metric = 'total_cost'
-
-    
     key_metrics_for_strategy_comparison = [primary_metric, 'f1_score', latency_metric, cost_metric]
     for metric in key_metrics_for_strategy_comparison:
         logger.info(f"Generating strategy comparison plot for: {metric}")
-        _plot_metric_by_strategy_comparison(df, output_dir, metric)
+        _plot_metric_by_strategy_comparison(plot_df, charts_dir, metric)
 
-    
     logger.info("Generating SC-CoT N sample comparison plots...")
     sc_metrics = [primary_metric, latency_metric, cost_metric]
     for metric in sc_metrics:
-        _plot_sc_comparison(df, output_dir, metric=metric)
-
-
+        _plot_sc_comparison(plot_df, charts_dir, metric=metric)
     
     logger.info("Generating trade-off scatter plots...")
-    _plot_scatter_tradeoff(df, output_dir, metric_y=primary_metric, metric_x=latency_metric) 
-    _plot_scatter_tradeoff(df, output_dir, metric_y=primary_metric, metric_x=cost_metric)    
-    _plot_scatter_tradeoff(df, output_dir, metric_y=latency_metric, metric_x=cost_metric)   
+    _plot_scatter_tradeoff(plot_df, charts_dir, metric_y=primary_metric, metric_x=latency_metric) 
+    _plot_scatter_tradeoff(plot_df, charts_dir, metric_y=primary_metric, metric_x=cost_metric)    
+    _plot_scatter_tradeoff(plot_df, charts_dir, metric_y=latency_metric, metric_x=cost_metric)   
 
-
-    
     logger.info("Generating average latency comparison plot...")
-    _plot_total_time_comparison(df, output_dir)
-
-
-    
+    _plot_total_time_comparison(plot_df, charts_dir)    
     logger.info("Generating per-strategy metric comparison plots...")
-    all_strategies = df['Strategy'].unique()
+    all_strategies = plot_df['Strategy'].unique()
     metrics_per_strategy = [primary_metric, 'f1_score', latency_metric, cost_metric, 'total_tokens']
     for strategy in all_strategies:
          logger.debug(f"Generating plots for strategy: {strategy}")
          
-         available_metrics_for_strat = df[(df['Strategy'] == strategy) & (df['Metric'].isin(metrics_per_strategy))]['Metric'].unique()
+         available_metrics_for_strat = plot_df[(plot_df['Strategy'] == strategy) & (plot_df['Metric'].isin(metrics_per_strategy))]['Metric'].unique()
          if available_metrics_for_strat.size > 0:
-             _plot_metric_comparison_for_strategy(df, strategy, list(available_metrics_for_strat), output_dir)
+             _plot_metric_comparison_for_strategy(plot_df, strategy, list(available_metrics_for_strat), charts_dir)
          else:
              logger.debug(f"No relevant metrics found for strategy '{strategy}' to plot per-strategy comparison.")
 
-
-    
     logger.info("Generating confusion matrices...")
     for model_id, strategies in all_model_run_summaries.items():
         for strategy_name, results in strategies.items():
@@ -663,12 +671,10 @@ def generate_all_charts(all_model_run_summaries: dict, charts_output_dir: Union[
                 matrix = results['confusion_matrix']
                 labels = results['labels']
                 if matrix and labels: 
-                     _plot_confusion_matrix(matrix, labels, model_id, strategy_name, output_dir)
+                     _plot_confusion_matrix(matrix, labels, model_id, strategy_name, charts_dir)
                 else:
                      logger.warning(f"Skipping confusion matrix for {model_id}/{strategy_name}: Empty matrix or labels.")
-            
-            
-
+    
     logger.info("Finished generating Matplotlib/Seaborn plots.")
 
     

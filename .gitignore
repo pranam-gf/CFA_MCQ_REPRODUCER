@@ -18,3 +18,4 @@ run_o3mini_openrouter_eval.py
 refs/
 paper_research_log.md
 .cursor/
+.DS_Store

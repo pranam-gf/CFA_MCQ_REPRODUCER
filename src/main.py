@@ -136,12 +136,7 @@ def _run_model_evaluations(
 
         model_type = model_config_item.get('type')
 
-        if model_type == 'bedrock' or model_type == 'sagemaker':
-            if not config.AWS_ACCESS_KEY_ID or not config.AWS_SECRET_ACCESS_KEY:
-                logger.error(f"Skipping {config_id_loop}: Missing AWS credentials.")
-                ui_utils.print_warning(f"Skipping {config_id_loop} (Bedrock/SageMaker): Missing AWS credentials.")
-                credentials_ok = False
-        elif model_type == 'mistral_official':
+        if model_type == 'mistral_official':
             if not config.MISTRAL_API_KEY:
                 logger.error(f"Skipping {config_id_loop}: Missing Mistral API key.")
                 ui_utils.print_warning(f"Skipping {config_id_loop} (Mistral Official): Missing Mistral API key.")

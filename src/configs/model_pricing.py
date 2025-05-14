@@ -9,39 +9,27 @@ import logging
 logger = logging.getLogger(__name__)
 
 OPENAI_PRICING = {
-    "o1": {
-        "prompt_tokens_cost_per_million": 15.00,
-        "completion_tokens_cost_per_million": 60.00,
-    },
-    "o1-mini": {
-        "prompt_tokens_cost_per_million": 1.10,
-        "completion_tokens_cost_per_million": 4.40,
-    },
-    "o3": {
-        "prompt_tokens_cost_per_million": 10.00,
-        "completion_tokens_cost_per_million": 40.00,
-    },
-    "o3-mini": {
-        "prompt_tokens_cost_per_million": 1.10,
-        "completion_tokens_cost_per_million": 4.40,
-    },
-    "o4-mini": {
-        "prompt_tokens_cost_per_million": 1.10,
-        "completion_tokens_cost_per_million": 4.40,
-    },
     "gpt-4o": {
         "prompt_tokens_cost_per_million": 2.50,
         "completion_tokens_cost_per_million": 10.00,
     },
-    "gpt-4.1": {
+    "o3-mini-2025-01-31": {
+        "prompt_tokens_cost_per_million": 1.10,
+        "completion_tokens_cost_per_million": 4.40,
+    },
+    "o4-mini-2025-04-16": {
+        "prompt_tokens_cost_per_million": 1.10,
+        "completion_tokens_cost_per_million": 4.40,
+    },
+    "gpt-4.1-2025-04-14": {
         "prompt_tokens_cost_per_million": 2.00,
         "completion_tokens_cost_per_million": 8.00,
     },
-    "gpt-4.1-mini": {
+    "gpt-4.1-mini-2025-04-14": {
         "prompt_tokens_cost_per_million": 0.40,
         "completion_tokens_cost_per_million": 1.60,
     },
-    "gpt-4.1-nano": {
+    "gpt-4.1-nano-2025-04-14": {
         "prompt_tokens_cost_per_million": 0.10,
         "completion_tokens_cost_per_million": 0.40,
     },
