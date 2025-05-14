@@ -1,10 +1,10 @@
-# CFA MCQ Question Reproducer
-
 <p align="center">
   <a href="https://www.goodfin.com/" target="_blank">
-    <img src="img/gf_logo.svg" alt="GoodFin Logo" width="200"/>
+    <img src="img/gf_logo.svg" alt="GoodFin Logo" width="200" style="background-color:white;"/>
   </a>
 </p>
+
+# CFA MCQ Question Reproducer
 
 This project processes CFA MCQ questions using various Large Language Models (LLMs)
 and evaluates their performance. It features an interactive UI with loading animations
@@ -17,7 +17,7 @@ This comprehensive LLM benchmark evaluates the performance of state-of-the-art l
 <table>
 <thead>
 <tr>
-<th align="center">📊 Benchmark Statistics</th>
+<th align="center">Benchmark Statistics</th>
 <th align="center">Details</th>
 <th align="center">Count</th>
 </tr>
