@@ -1,8 +1,52 @@
 # CFA MCQ Question Reproducer
 
+<p align="center">
+  <a href="https://www.goodfin.com/" target="_blank">
+    <img src="img/gf_logo.svg" alt="GoodFin Logo" width="200"/>
+  </a>
+</p>
+
 This project processes CFA MCQ questions using various Large Language Models (LLMs)
 and evaluates their performance. It features an interactive UI with loading animations
 and progress indicators to provide real-time feedback during processing.
+
+## Benchmark Overview
+
+This comprehensive LLM benchmark evaluates the performance of state-of-the-art language models on CFA multiple-choice questions, measuring both accuracy and efficiency metrics.
+
+<table>
+<thead>
+<tr>
+<th align="center">📊 Benchmark Statistics</th>
+<th align="center">Details</th>
+<th align="center">Count</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="center"><strong>🤖 Models</strong></td>
+<td>Claude-3.7-Sonnet, Claude-3.5-Sonnet, Claude-3.5-Haiku, Mistral-Large, Codestral, Palmyra-fin, GPT-4o, O3-mini, O4-mini, GPT-4.1, GPT-4.1-mini, GPT-4.1-nano, Grok-3, Grok-3-mini-beta (high/low effort), Gemini-2.5-Pro, Gemini-2.5-Flash, Deepseek-R1, Llama-4-Maverick, Llama-4-Scout, Llama-Guard-4, Llama-3.3-70B, Llama-3.1-8B-instant</td>
+<td align="center"><strong>22+</strong></td>
+</tr>
+<tr>
+<td align="center"><strong>🧠 Strategies</strong></td>
+<td>Default, Chain of Thought (CoT), Self-Discover, Self-Consistency with different sample sizes (N=3, N=5)</td>
+<td align="center"><strong>3-5</strong></td>
+</tr>
+<tr>
+<td align="center"><strong>📏 Metrics</strong></td>
+<td>Accuracy, Precision, Recall, F1 score, Average Latency (ms), Total Input Tokens, Total Output Tokens, Total Tokens, Average Answer Length, Total Cost, Total Run Time</td>
+<td align="center"><strong>11</strong></td>
+</tr>
+<tr>
+<td align="center"><strong>📈 Visualizations</strong></td>
+<td>Model-Strategy Accuracy Comparison, Average Processing Time, Total Output Tokens, Combined Performance (Accuracy & Time), Accuracy/F1 Comparison (Default vs SC-CoT), Self-Consistency CoT Comparison (N=3 vs N=5), Accuracy/F1 vs Time Trade-off, Accuracy/F1 vs Cost Trade-off, Latency vs Cost Trade-off, Total Run Time Comparison, Default Strategy Metric Comparisons (Accuracy, F1, Latency), Confusion Matrices</td>
+<td align="center"><strong>15+</strong></td>
+</tr>
+</tbody>
+</table>
+
+This benchmark analyzes over 22 state-of-the-art LLMs across multiple reasoning strategies, measuring 11 performance metrics, and generating 15+ detailed visualization plots to evaluate and compare their performance on CFA multiple-choice questions.
 
 ## Project Structure
 
