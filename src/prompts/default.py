@@ -17,7 +17,9 @@ Question Stem:
 {question_stem}
 
 Options:
-{options_text}
+A: {option_a}
+B: {option_b}
+C: {option_c}
 
 Choose the single best answer.
 Your final output MUST be a single uppercase letter (A, B, C, or D) and NOTHING ELSE. Any deviation will result in a failure.
@@ -35,7 +37,9 @@ Question Stem:
 {question_stem}
 
 Options:
-{options_text}
+A: {option_a}
+B: {option_b}
+C: {option_c}
 
 Carefully read the vignette, question, and options. Choose the single best answer.
 

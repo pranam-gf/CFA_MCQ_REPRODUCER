@@ -16,7 +16,9 @@ SELF_DISCOVER_PROMPT_TEMPLATE = """\
 {question_stem}
 
 **Options:**
-{options_text}
+A: {option_a}
+B: {option_b}
+C: {option_c}
 
 **Self-Discover Reasoning Process:**
 
@@ -58,7 +60,9 @@ def format_self_discover_prompt(question_data: dict) -> str:
     return SELF_DISCOVER_PROMPT_TEMPLATE.format(
         vignette=parsed_data['vignette'],
         question_stem=parsed_data['question_stem'],
-        options_text=parsed_data['options_text']
+        option_a=parsed_data['options_dict'].get('A', 'Option A not provided'),
+        option_b=parsed_data['options_dict'].get('B', 'Option B not provided'),
+        option_c=parsed_data['options_dict'].get('C', 'Option C not provided')
     )
 
 def generate_prompt_for_self_discover_strategy(entry: dict) -> str:
@@ -67,5 +71,7 @@ def generate_prompt_for_self_discover_strategy(entry: dict) -> str:
     return SELF_DISCOVER_PROMPT_TEMPLATE.format(
         vignette=parsed_data['vignette'],
         question_stem=parsed_data['question_stem'],
-        options_text=parsed_data['options_text']
+        option_a=parsed_data['options_dict'].get('A', 'Option A not provided'),
+        option_b=parsed_data['options_dict'].get('B', 'Option B not provided'),
+        option_c=parsed_data['options_dict'].get('C', 'Option C not provided')
     ) 

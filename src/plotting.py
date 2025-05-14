@@ -5,10 +5,6 @@ import logging
 import os
 import pandas as pd
 import numpy as np 
-# import plotly.express as px # Comment out plotly express for now
-# import plotly.graph_objects as go # Comment out plotly graph objects
-# from plotly.subplots import make_subplots # Comment out plotly subplots
-# import plotly.io as pio # Comment out plotly io
 from . import config
 from .utils import ui_utils
 import matplotlib.pyplot as plt
@@ -38,26 +34,26 @@ plt.rcParams.update({
     "savefig.dpi": 300,
     "axes.grid": False, 
     # "grid.color": "#E0E0E0", 
-    "axes.edgecolor": "#333333", # Darker edge color for axes lines, similar to reference
-    "axes.linewidth": 1.2, # Make axis lines a bit thicker like in reference
+    "axes.edgecolor": "#333333", 
+    "axes.linewidth": 1.2, 
     "axes.titlepad": 15, 
     "figure.facecolor": "white", 
     "savefig.facecolor": "white", 
-    "xtick.direction": "out", # Ticks point outwards
-    "ytick.direction": "out", # Ticks point outwards
-    "xtick.major.size": 5, # Length of the major x-ticks
-    "ytick.major.size": 5, # Length of the major y-ticks
-    "xtick.major.width": 1.2, # Thickness of x-ticks
-    "ytick.major.width": 1.2, # Thickness of y-ticks
-    "xtick.minor.size": 3,  # For minor ticks, if ever used
-    "ytick.minor.size": 3,  # For minor ticks, if ever used
+    "xtick.direction": "out", 
+    "ytick.direction": "out", 
+    "xtick.major.size": 5, 
+    "ytick.major.size": 5, 
+    "xtick.major.width": 1.2, 
+    "ytick.major.width": 1.2, 
+    "xtick.minor.size": 3,  
+    "ytick.minor.size": 3,  
     "xtick.minor.width": 0.8,
     "ytick.minor.width": 0.8,
-    "xtick.bottom": True, # Ensure bottom x-ticks are on
-    "ytick.left": True,   # Ensure left y-ticks are on
+    "xtick.bottom": True, 
+    "ytick.left": True,   
     # "text.usetex": False, 
 })
-# --- End Updated Matplotlib/Seaborn Styling ---
+
 
 
 def _wrap_labels(ax, width, break_long_words=False):
@@ -160,7 +156,7 @@ def _get_strategy_param(strategy_name: str) -> str:
         return "" 
 
 
-# --- Modify Plotting Function to use Matplotlib/Seaborn ---
+
 def _plot_metric_by_strategy_comparison(df: pd.DataFrame, output_dir: Union[str, Path], metric: str):
     """Generates grouped bar chart comparing key strategies for each model using Seaborn."""
     metric_df = df[df['Metric'] == metric].copy()
@@ -168,7 +164,7 @@ def _plot_metric_by_strategy_comparison(df: pd.DataFrame, output_dir: Union[str,
         logger.info(f"Skipping '{metric}' by strategy comparison plot: No data found for this metric.")
         return
 
-    # Keep the original filtering for strategies to compare if needed, or adjust as necessary
+    
     strategies_to_compare_explicit = [
         s for s in df['Strategy'].unique() 
         if "Default" in s or "Self-Discover" in s or ("Self-Consistency CoT" in s and "N=3" in s)
@@ -185,26 +181,26 @@ def _plot_metric_by_strategy_comparison(df: pd.DataFrame, output_dir: Union[str,
         return
     
     metric_title = metric.replace('_', ' ').title()
-    # Updated title for clarity, will be styled further
+    
     title = f'{metric_title} Comparison Across Strategies and Models'
 
-    # Dynamically adjust height based on number of strategies and models
+    
     num_models = df_comp['Model'].nunique()
     num_strategies = df_comp['Strategy'].nunique()
     
-    # Start with a base height and add per model, adjust multiplier as needed
-    # The width might need adjustment if model names are long.
+    
+    
     plt.figure(figsize=(max(10, num_models * 2), 6 + num_strategies * 0.5))
 
 
-    # Use the INSPIRED_PALETTE defined at the top of the file
-    # Dynamically adjust the number of colors from the palette based on the number of unique strategies
+    
+    
     current_palette = INSPIRED_PALETTE[:num_strategies] if num_strategies > 0 else INSPIRED_PALETTE[:1]
 
-    # Swapped x and y, changed orient to 'v', and hue to 'Strategy'
+    
     ax = sns.barplot(data=df_comp, x='Model', y='Value', hue='Strategy', palette=current_palette)
 
-    # Add data labels on top of each bar
+    
     for p in ax.patches:
         height = p.get_height()
         try:
@@ -222,61 +218,61 @@ def _plot_metric_by_strategy_comparison(df: pd.DataFrame, output_dir: Union[str,
             label_text = "N/A"
 
         ax.text(p.get_x() + p.get_width() / 2.,
-                height + (ax.get_ylim()[1] * 0.01), # Position label slightly above the bar
+                height + (ax.get_ylim()[1] * 0.01), 
                 label_text,
                 ha='center', 
                 va='bottom',
                 fontsize=plt.rcParams["font.size"] * 0.8)
 
-    ax.set_xlabel("Model") # X-axis is now Model
-    ax.set_ylabel(metric_title) # Y-axis is the metric value
+    ax.set_xlabel("Model") 
+    ax.set_ylabel(metric_title) 
     
-    # Set title with bold font and left alignment
+    
     ax.set_title(title, fontsize=plt.rcParams["axes.titlesize"], pad=plt.rcParams["axes.titlepad"], loc='left', fontweight='bold')
 
-    # Add solid y-axis grid lines and ensure they are behind the bars
+    
     ax.yaxis.grid(True, linestyle='-', linewidth=0.5, alpha=0.7, color='lightgray')
     ax.set_axisbelow(True)
 
-    # Set y-axis limits, especially for percentage-like metrics
+    
     if metric.lower() in ['accuracy', 'f1_score', 'precision', 'recall'] or \
        'rate' in metric.lower() or 'percentage' in metric.lower() or 'score' in metric.lower():
         current_max_val = df_comp['Value'].max() if not df_comp.empty else 1.0
         current_min_val = df_comp['Value'].min() if not df_comp.empty else 0.0
         
-        # Ensure y-axis starts at 0 (or slightly below if negative values are possible and present)
-        plot_min_y = 0 if current_min_val >= 0 else current_min_val * 1.1 # Adjust if negative values are meaningful
+        
+        plot_min_y = 0 if current_min_val >= 0 else current_min_val * 1.1 
 
-        # For scores typically between 0 and 1
+        
         if metric.lower() in ['accuracy', 'f1_score', 'precision', 'recall']:
-            # Ensure y-axis goes up to at least 1.0 (or a bit more)
+            
             plot_max_y = max(1.05, current_max_val * 1.05 if current_max_val > 0 else 1.05)
         else:
-            plot_max_y = current_max_val * 1.1 if current_max_val > 0 else 0.1 # For other rates/percentages
-            if current_max_val == 0 and current_min_val == 0 : plot_max_y = 0.1 # Handle all zero case
+            plot_max_y = current_max_val * 1.1 if current_max_val > 0 else 0.1 
+            if current_max_val == 0 and current_min_val == 0 : plot_max_y = 0.1 
         
         ax.set_ylim(bottom=plot_min_y, top=plot_max_y)
     else:
-        # For other metrics like latency, ensure it starts at 0 if all values are positive
+        
         if not df_comp.empty and df_comp['Value'].min() >= 0:
             ax.set_ylim(bottom=0, top=df_comp['Value'].max() * 1.1 if df_comp['Value'].max() > 0 else None)
         elif not df_comp.empty:
-            ax.set_ylim(top=df_comp['Value'].max() * 1.1 if df_comp['Value'].max() > 0 else None) # Allow auto bottom for negative values if any
+            ax.set_ylim(top=df_comp['Value'].max() * 1.1 if df_comp['Value'].max() > 0 else None) 
 
-    # Improve legend placement and title
+    
     plt.legend(title='Strategy', bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0.)
     
-    # Rotate x-axis labels if model names are long
-    plt.xticks(rotation=45, ha="right", fontsize=plt.rcParams["xtick.labelsize"] * 0.9) # Adjust rotation and size as needed
+    
+    plt.xticks(rotation=45, ha="right", fontsize=plt.rcParams["xtick.labelsize"] * 0.9) 
 
     sns.despine(ax=ax, top=True, right=True, left=False, bottom=False, trim=False) 
 
-    plt.tight_layout(rect=[0, 0, 0.85, 1]) # Adjust layout to make space for legend
+    plt.tight_layout(rect=[0, 0, 0.85, 1]) 
     
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
     
-    # Updated filename to reflect new structure if desired, or keep as is
+    
     chart_filename = output_path / f"comparison_{metric.lower()}_by_model_and_strategy.png" 
     plt.savefig(chart_filename, dpi=plt.rcParams["savefig.dpi"], bbox_inches='tight')
     plt.close()
@@ -294,16 +290,16 @@ def _plot_sc_comparison(df: pd.DataFrame, output_dir: Union[str, Path], metric: 
     metric_df['strategy_param'] = metric_df['Strategy'].apply(_get_strategy_param)
     metric_df['base_model_id'] = metric_df['Model']
 
-    # Filter for SC-CoT strategies only
+    
     df_comp = metric_df[metric_df['strategy_type'] == 'SC-CoT'].copy()
 
-    # Ensure we have comparable parameters (like N=3, N=5)
+    
     comparable_params = df_comp[df_comp['strategy_param'].str.contains(r'N=\d+', regex=True)]['strategy_param'].unique()
     if len(comparable_params) < 2:
         logger.info(f"Skipping SC '{metric}' comparison plot: Need results for at least two different N values (e.g., N=3 and N=5). Found: {comparable_params}")
         return
 
-    # Keep only data with comparable N parameters
+    
     df_comp = df_comp[df_comp['strategy_param'].isin(comparable_params)].copy()
 
     metric_title = metric.replace('_', ' ').title()
@@ -311,15 +307,15 @@ def _plot_sc_comparison(df: pd.DataFrame, output_dir: Union[str, Path], metric: 
 
     plt.figure(figsize=(10, 6))
     ax = sns.barplot(data=df_comp, x='base_model_id', y='Value', hue='strategy_param',
-                     errorbar=None) # Add error bars if needed
+                     errorbar=None) 
 
-    # Add value labels
+    
     for container in ax.containers:
         ax.bar_label(container, fmt='%.3f', fontsize=8, padding=3)
 
     ax.set_xlabel("Base Model")
     ax.set_ylabel(metric_title)
-    ax.set_title(title, loc='left', fontweight='bold') # Use rcParams size, add loc and fontweight
+    ax.set_title(title, loc='left', fontweight='bold') 
 
     plt.xticks(rotation=45, ha='right', fontsize=8)
     plt.yticks(fontsize=8)
@@ -329,11 +325,11 @@ def _plot_sc_comparison(df: pd.DataFrame, output_dir: Union[str, Path], metric: 
     else:
          plt.ylim(top=df_comp['Value'].max() * 1.15 if not df_comp.empty else None)
 
-    # Move legend outside
+    
     ax.legend(title='Samples (N)', bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0.)
 
     sns.despine()
-    plt.tight_layout(rect=[0, 0, 0.85, 1]) # Adjust layout for legend
+    plt.tight_layout(rect=[0, 0, 0.85, 1]) 
 
     filename_base = f'comparison_sc_{metric}_n_samples'
     output_path = Path(output_dir) / f'{filename_base}.png'
@@ -344,10 +340,10 @@ def _plot_sc_comparison(df: pd.DataFrame, output_dir: Union[str, Path], metric: 
     except Exception as e:
         logger.error(f"Failed to save plot {output_path}: {e}")
         plt.close()
-# --- End SC Comparison Conversion ---
 
 
-# --- Convert Scatter Plot to Seaborn ---
+
+
 def _plot_scatter_tradeoff(df: pd.DataFrame, output_dir: Union[str, Path], metric_y: str, metric_x: str):
     """Generates scatter plot showing a trade-off between two metrics using Seaborn."""
     try:
@@ -365,11 +361,11 @@ def _plot_scatter_tradeoff(df: pd.DataFrame, output_dir: Union[str, Path], metri
         logger.warning(f"No data points with both '{metric_y}' and '{metric_x}' available for scatter plot.")
         return
 
-    # Add strategy type for marker style and base model ID
+    
     df_plot['strategy_type'] = df_plot['Strategy'].apply(_get_strategy_type)
     df_plot['base_model_id'] = df_plot['Model']
 
-    # Prepare titles and labels
+    
     metric_y_title = metric_y.replace('_', ' ').title()
     metric_x_title = metric_x.replace('_', ' ').replace(' Ms', ' (ms)').replace(' S', ' (s)').title()
     if metric_x == 'total_cost':
@@ -383,9 +379,9 @@ def _plot_scatter_tradeoff(df: pd.DataFrame, output_dir: Union[str, Path], metri
         y=metric_y,
         hue='base_model_id',
         style='strategy_type',
-        s=100, # Adjust marker size
+        s=100, 
         alpha=0.8,
-        edgecolor='k', # Add marker edge color
+        edgecolor='k', 
         linewidth=0.5
     )
 
@@ -393,7 +389,7 @@ def _plot_scatter_tradeoff(df: pd.DataFrame, output_dir: Union[str, Path], metri
     ax.set_ylabel(metric_y_title)
     ax.set_title(title, loc='left', fontweight='bold')
 
-    # Adjust y-axis for accuracy-like metrics
+    
     if metric_y in ['accuracy', 'f1_score', 'precision', 'recall']:
         min_y = df_plot[metric_y].min()
         max_y = df_plot[metric_y].max()
@@ -401,12 +397,12 @@ def _plot_scatter_tradeoff(df: pd.DataFrame, output_dir: Union[str, Path], metri
                     top=max(1.0, max_y * 1.05) if max_y < 1 else max_y * 1.05)
 
 
-    # Move legend outside
+    
     ax.legend(title='Legend (Model / Strategy)', bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0.)
 
-    # Optionally add text labels (can get crowded)
-    # for i, point in df_plot.iterrows():
-    #     ax.text(point[metric_x] * 1.01, point[metric_y], f"{point['base_model_id']}", fontsize=7)
+    
+    
+    
 
     sns.despine()
     plt.tight_layout(rect=[0, 0, 0.85, 1])
@@ -420,10 +416,10 @@ def _plot_scatter_tradeoff(df: pd.DataFrame, output_dir: Union[str, Path], metri
     except Exception as e:
         logger.error(f"Failed to save plot {output_path}: {e}")
         plt.close()
-# --- End Scatter Plot Conversion ---
 
 
-# --- Remove Goodfin Overrides from _plot_total_time_comparison ---
+
+
 def _plot_total_time_comparison(df: pd.DataFrame, output_dir: Union[str, Path]):
     """Plots a comparison of average latency across models and strategies using Seaborn."""
     time_df = df[df['Metric'] == 'average_latency_ms'].copy()
@@ -433,45 +429,45 @@ def _plot_total_time_comparison(df: pd.DataFrame, output_dir: Union[str, Path]):
 
     plt.figure(figsize=(12, 7))
     num_models = time_df['Model'].nunique()
-    models = sorted(time_df['Model'].unique()) # Sort for consistent hue order
+    models = sorted(time_df['Model'].unique()) 
 
-    # Use the globally set Seaborn theme palette
+    
     ax = sns.barplot(data=time_df, x='Strategy', y='Value', hue='Model', hue_order=models,
-                     dodge=True, errorbar=None) # Rely on global theme
+                     dodge=True, errorbar=None) 
 
-    plt.title('Average Latency Comparison Across Strategies and Models', loc='left', fontweight='bold') # Use rcParams size, add loc and fontweight
-    plt.ylabel('Average Latency (ms)') # Use rcParams size
-    plt.xlabel('Strategy') # Use rcParams size
-    plt.xticks(rotation=30, ha='right') # Use rcParams size
-    plt.yticks() # Use rcParams size
+    plt.title('Average Latency Comparison Across Strategies and Models', loc='left', fontweight='bold') 
+    plt.ylabel('Average Latency (ms)') 
+    plt.xlabel('Strategy') 
+    plt.xticks(rotation=30, ha='right') 
+    plt.yticks() 
 
-    # Move legend outside
+    
     legend = ax.legend(title='Model', bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0.)
-    # plt.setp(legend.get_title(), color=GOODFIN_TEXT_COLOR) # Remove Goodfin color
-    # plt.setp(legend.get_texts(), color=GOODFIN_MUTED_TEXT_COLOR) # Remove Goodfin color
+    
+    
 
-    # Add bar labels
+    
     for container in ax.containers:
         labels = [f'{v:.0f}' if v >= 1 else f'{v:.3f}' for v in container.datavalues]
         ax.bar_label(container, labels=labels, label_type='edge', padding=3,
-                     fontsize=plt.rcParams['xtick.labelsize'] - 1) # Use relative size
+                     fontsize=plt.rcParams['xtick.labelsize'] - 1) 
 
     ax.set_ylim(bottom=0)
-    sns.despine() # Keep default despine (top/right)
-    plt.tight_layout(rect=[0, 0, 0.88, 1]) # Adjust rect for legend
+    sns.despine() 
+    plt.tight_layout(rect=[0, 0, 0.88, 1]) 
 
     output_path = Path(output_dir) / "average_latency_comparison.png"
     try:
-        plt.savefig(output_path, bbox_inches='tight') # Use global DPI
+        plt.savefig(output_path, bbox_inches='tight') 
         plt.close()
         logger.info(f"Saved plot: {output_path}")
     except Exception as e:
         logger.error(f"Failed to save plot {output_path}: {e}")
         plt.close()
-# --- End Goodfin Override Removal ---
 
 
-# --- Remove Goodfin Overrides from _plot_metric_comparison_for_strategy ---
+
+
 def _plot_metric_comparison_for_strategy(df: pd.DataFrame, strategy_name: str, metrics_to_plot: list[str], output_dir: Union[str, Path]):
     """
     Generates separate bar charts comparing models for a specific strategy using Seaborn.
@@ -491,7 +487,7 @@ def _plot_metric_comparison_for_strategy(df: pd.DataFrame, strategy_name: str, m
         logger.info(f"No models found for strategy '{strategy_name}'. Skipping model comparison plots.")
         return
 
-    models = sorted(strategy_df_full['Model'].unique()) # Sort for consistent x-axis order
+    models = sorted(strategy_df_full['Model'].unique()) 
 
     for metric in metrics_to_plot:
         metric_df = strategy_df_full[strategy_df_full['Metric'] == metric]
@@ -499,14 +495,14 @@ def _plot_metric_comparison_for_strategy(df: pd.DataFrame, strategy_name: str, m
             logger.warning(f"No data found for metric '{metric}' in strategy '{strategy_name}'. Skipping plot.")
             continue
 
-        plt.figure(figsize=(max(6, num_models * 1.5), 5)) # Adjust width based on model count
+        plt.figure(figsize=(max(6, num_models * 1.5), 5)) 
 
         ax = sns.barplot(data=metric_df, x='Model', y='Value', order=models,
-                         hue='Model', legend=False, # Use global palette
-                         errorbar=None) # Add errorbar if needed
+                         hue='Model', legend=False, 
+                         errorbar=None) 
 
         metric_title = metric.replace('_', ' ').title()
-        # Add units for specific metrics
+        
         if metric == 'total_cost':
             ylabel = f'{metric_title} ($)'
             label_fmt = '${:,.3f}'
@@ -525,43 +521,43 @@ def _plot_metric_comparison_for_strategy(df: pd.DataFrame, strategy_name: str, m
 
         plot_title = f"{metric_title} for {strategy_name}"
         
-        plt.title(plot_title, loc='left', fontweight='bold', wrap=True) # Add loc and fontweight
-        plt.ylabel(ylabel) # Use rcParams size
-        plt.xlabel('Model') # Use rcParams size
-        plt.xticks(rotation=45, ha="right", fontsize=plt.rcParams["xtick.labelsize"] * 0.9) # Keep rotation 0 if names fit, use rcParams size
-        plt.yticks() # Use rcParams size
+        plt.title(plot_title, loc='left', fontweight='bold', wrap=True) 
+        plt.ylabel(ylabel) 
+        plt.xlabel('Model') 
+        plt.xticks(rotation=45, ha="right", fontsize=plt.rcParams["xtick.labelsize"] * 0.9) 
+        plt.yticks() 
 
-        # Add bar labels
+        
         for container in ax.containers:
             labels = [label_fmt.format(v) for v in container.datavalues]
             ax.bar_label(container, labels=labels,
-                         fontsize=plt.rcParams['xtick.labelsize'] -1, padding=3) # Relative size
+                         fontsize=plt.rcParams['xtick.labelsize'] -1, padding=3) 
 
-        # Set Y limits appropriately
+        
         if metric in ['accuracy', 'f1_score', 'precision', 'recall']:
             ax.set_ylim(bottom=0, top=max(1.05, metric_df['Value'].max() * 1.1))
         elif metric_df['Value'].min() >= 0:
              ax.set_ylim(bottom=0, top=metric_df['Value'].max() * 1.15 if metric_df['Value'].max() > 0 else 0.1)
-        # else: keep default limits
+        
 
         if metric_df['Value'].max() == 0:
              ax.set_ylim(bottom=-0.001, top=0.01)
              ax.set_yticks([0])
 
-        # _wrap_labels(ax, width=15 if num_models > 5 else 20) # Wrap labels only if many models
+        
         sns.despine()
         plt.tight_layout()
 
         safe_strategy_name = strategy_name.replace(' ', '_').replace('(', '').replace(')', '').replace('=', '').replace('/', '')
         output_path = Path(output_dir) / f"{safe_strategy_name}_strategy_{metric}_comparison.png"
         try:
-            plt.savefig(output_path, bbox_inches='tight') # Use global DPI
+            plt.savefig(output_path, bbox_inches='tight') 
             plt.close()
             logger.info(f"Saved plot: {output_path}")
         except Exception as e:
             logger.error(f"Failed to save plot {output_path}: {e}")
             plt.close()
-# --- End Goodfin Override Removal ---
+
 
 
 def _plot_confusion_matrix(matrix: Union[np.ndarray, List[List[int]]], labels: List[str], model_id: str, strategy_name: str, output_dir: Union[str, Path]):
@@ -576,18 +572,18 @@ def _plot_confusion_matrix(matrix: Union[np.ndarray, List[List[int]]], labels: L
         return
 
     plt.figure(figsize=(8, 6))
-    ax = sns.heatmap(matrix, annot=True, fmt="d", cmap="Blues", # Use a standard cmap
+    ax = sns.heatmap(matrix, annot=True, fmt="d", cmap="Blues", 
                 xticklabels=labels, yticklabels=labels,
                 annot_kws={"size": 10})
     plt.ylabel('Actual')
     plt.xlabel('Predicted')
-    ax.set_title(f'Confusion Matrix: {model_id} ({strategy_name})', fontsize=12, loc='left', fontweight='bold') # add loc and fontweight
+    ax.set_title(f'Confusion Matrix: {model_id} ({strategy_name})', fontsize=12, loc='left', fontweight='bold') 
     plt.xticks(rotation=45, ha='right', fontsize=8)
     plt.yticks(rotation=0, fontsize=8)
     plt.tight_layout()
     try:
         plt.savefig(output_path)
-        plt.close() # Close the figure
+        plt.close() 
         logger.info(f"Saved confusion matrix: {output_path}")
     except Exception as e:
         logger.error(f"Failed to save confusion matrix {output_path}: {e}")
@@ -602,7 +598,7 @@ def generate_all_charts(all_model_run_summaries: dict, charts_output_dir: Union[
         all_model_run_summaries: Dictionary containing metric summaries for different models and strategies.
         charts_output_dir: The directory path to save the generated charts.
     """
-    output_dir = Path(charts_output_dir) # Ensure it's a Path object
+    output_dir = Path(charts_output_dir) 
     output_dir.mkdir(parents=True, exist_ok=True)
 
     df = _prepare_plot_data(all_model_run_summaries)
@@ -612,46 +608,46 @@ def generate_all_charts(all_model_run_summaries: dict, charts_output_dir: Union[
         ui_utils.print_warning("Plotting skipped: No valid data prepared from summaries.")
         return
 
-    # --- Generate Matplotlib/Seaborn Plots ---
+    
     logger.info("Generating plots using Matplotlib/Seaborn...")
 
-    # Define key metrics
+    
     primary_metric = 'accuracy'
     latency_metric = 'average_latency_ms'
     cost_metric = 'total_cost'
 
-    # 1. Key Strategy Comparison Plots (Bar)
+    
     key_metrics_for_strategy_comparison = [primary_metric, 'f1_score', latency_metric, cost_metric]
     for metric in key_metrics_for_strategy_comparison:
         logger.info(f"Generating strategy comparison plot for: {metric}")
         _plot_metric_by_strategy_comparison(df, output_dir, metric)
 
-    # 2. SC-CoT N=3 vs N=5 Comparison (Bar)
+    
     logger.info("Generating SC-CoT N sample comparison plots...")
     sc_metrics = [primary_metric, latency_metric, cost_metric]
     for metric in sc_metrics:
         _plot_sc_comparison(df, output_dir, metric=metric)
 
 
-    # 3. Trade-off Scatter Plots
+    
     logger.info("Generating trade-off scatter plots...")
-    _plot_scatter_tradeoff(df, output_dir, metric_y=primary_metric, metric_x=latency_metric) # Accuracy vs Latency
-    _plot_scatter_tradeoff(df, output_dir, metric_y=primary_metric, metric_x=cost_metric)    # Accuracy vs Cost
-    _plot_scatter_tradeoff(df, output_dir, metric_y=latency_metric, metric_x=cost_metric)   # Latency vs Cost
+    _plot_scatter_tradeoff(df, output_dir, metric_y=primary_metric, metric_x=latency_metric) 
+    _plot_scatter_tradeoff(df, output_dir, metric_y=primary_metric, metric_x=cost_metric)    
+    _plot_scatter_tradeoff(df, output_dir, metric_y=latency_metric, metric_x=cost_metric)   
 
 
-    # 4. Total Time (Latency) Comparison (Bar)
+    
     logger.info("Generating average latency comparison plot...")
     _plot_total_time_comparison(df, output_dir)
 
 
-    # 5. Per-Strategy Metric Comparison (Bar)
+    
     logger.info("Generating per-strategy metric comparison plots...")
     all_strategies = df['Strategy'].unique()
     metrics_per_strategy = [primary_metric, 'f1_score', latency_metric, cost_metric, 'total_tokens']
     for strategy in all_strategies:
          logger.debug(f"Generating plots for strategy: {strategy}")
-         # Filter metrics actually available for this strategy in the dataframe
+         
          available_metrics_for_strat = df[(df['Strategy'] == strategy) & (df['Metric'].isin(metrics_per_strategy))]['Metric'].unique()
          if available_metrics_for_strat.size > 0:
              _plot_metric_comparison_for_strategy(df, strategy, list(available_metrics_for_strat), output_dir)
@@ -659,32 +655,32 @@ def generate_all_charts(all_model_run_summaries: dict, charts_output_dir: Union[
              logger.debug(f"No relevant metrics found for strategy '{strategy}' to plot per-strategy comparison.")
 
 
-    # 6. Confusion Matrices (Heatmap - already converted)
+    
     logger.info("Generating confusion matrices...")
     for model_id, strategies in all_model_run_summaries.items():
         for strategy_name, results in strategies.items():
             if isinstance(results, dict) and 'confusion_matrix' in results and 'labels' in results:
                 matrix = results['confusion_matrix']
                 labels = results['labels']
-                if matrix and labels: # Check if matrix and labels are not empty
+                if matrix and labels: 
                      _plot_confusion_matrix(matrix, labels, model_id, strategy_name, output_dir)
                 else:
                      logger.warning(f"Skipping confusion matrix for {model_id}/{strategy_name}: Empty matrix or labels.")
-            # else: # Don't log for every strategy that *doesn't* have a matrix
-            #     logger.debug(f"Confusion matrix data not found for {model_id}/{strategy_name}. Skipping matrix plot.")
+            
+            
 
     logger.info("Finished generating Matplotlib/Seaborn plots.")
 
-    # --- TODO: Convert remaining Plotly functions or remove them ---
-    # The following plots still use Plotly and will retain the old style or fail if Plotly is removed.
-    # They need to be converted to Matplotlib/Seaborn or removed.
+    
+    
+    
 
-    # Example: Placeholder for future conversion
-    # def _plot_sc_comparison_seaborn(...): ... # CONVERTED
-    # def _plot_time_vs_accuracy_seaborn(...): ... # CONVERTED via _plot_scatter_tradeoff
-    # def _plot_accuracy_vs_cost_seaborn(...): ... # CONVERTED via _plot_scatter_tradeoff
-    # def _plot_latency_vs_cost_seaborn(...): ... # CONVERTED via _plot_scatter_tradeoff
-    # ... etc ... # Other plots seem to be handled now.
+    
+    
+    
+    
+    
+    
 
 
 

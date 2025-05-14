@@ -384,25 +384,27 @@ def main():
             for key, details in AVAILABLE_STRATEGIES.items()
         ] 
 
-        print("\nPlease select which prompting strategy to use:")
-        selected_strategy_key = questionary.select(
-            "Select prompting strategy:",
-            choices=strategy_choices
+        print("\nPlease select which prompting strategies to use:")
+        selected_strategy_keys = questionary.checkbox(
+            "Select prompting strategies (space to select, arrows to move, enter to confirm):",
+            choices=strategy_choices,
+            validate=lambda a: True if a else "Select at least one strategy."
         ).ask()
 
-        if not selected_strategy_key:
-            ui_utils.print_warning("No prompting strategy selected. Exiting.")
+        if not selected_strategy_keys:
+            ui_utils.print_warning("No prompting strategies selected. Exiting.")
             return
         
-        if selected_model_ids and selected_strategy_key:
-             print(f"\n--- Starting Custom Run: Strategy '{AVAILABLE_STRATEGIES[selected_strategy_key]['name']}' ---")
-             _run_model_evaluations(
-                 processed_data=processed_data,
-                 selected_model_ids=selected_model_ids, 
-                 strategy_key=selected_strategy_key,
-                 all_model_runs_summary=all_model_runs_summary 
-             )
-             print(f"--- Completed Custom Run: Strategy '{AVAILABLE_STRATEGIES[selected_strategy_key]['name']}' ---")
+        if selected_model_ids and selected_strategy_keys:
+             for selected_strategy_key in selected_strategy_keys:
+                 print(f"\n--- Starting Custom Run: Strategy '{AVAILABLE_STRATEGIES[selected_strategy_key]['name']}' ---")
+                 _run_model_evaluations(
+                     processed_data=processed_data,
+                     selected_model_ids=selected_model_ids, 
+                     strategy_key=selected_strategy_key,
+                     all_model_runs_summary=all_model_runs_summary 
+                 )
+                 print(f"--- Completed Custom Run: Strategy '{AVAILABLE_STRATEGIES[selected_strategy_key]['name']}' ---")
         else:
             
              logger.warning("Skipping custom run execution due to missing selections.")

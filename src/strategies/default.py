@@ -23,7 +23,9 @@ def generate_prompt_for_default_strategy(entry: dict, model_type: str | None = N
     return template.format(
         vignette=parsed_data['vignette'],
         question_stem=parsed_data['question_stem'],
-        options_text=parsed_data['options_text']
+        option_a=parsed_data['options_dict'].get('A', 'Option A not provided'),
+        option_b=parsed_data['options_dict'].get('B', 'Option B not provided'),
+        option_c=parsed_data['options_dict'].get('C', 'Option C not provided')
     )
 
 def run_default_strategy(data: list[dict], model_config_item: dict) -> list[dict]:

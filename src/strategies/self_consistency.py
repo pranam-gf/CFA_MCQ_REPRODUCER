@@ -87,7 +87,9 @@ def generate_prompt_for_cot_strategy(entry: dict, cot_template: str) -> str:
     return cot_template.format(
         vignette=parsed_data['vignette'],
         question_stem=parsed_data['question_stem'],
-        options_text=parsed_data['options_text'] 
+        option_a=parsed_data['options_dict'].get('A', 'Option A not provided'),
+        option_b=parsed_data['options_dict'].get('B', 'Option B not provided'),
+        option_c=parsed_data['options_dict'].get('C', 'Option C not provided')
     )
 
 def run_self_consistency_strategy(data: list[dict], model_config_item: dict, cot_template: str, n_samples: int = 3) -> list[dict]:

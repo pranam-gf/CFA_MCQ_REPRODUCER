@@ -17,7 +17,9 @@ Question Stem:
 {question_stem}
 
 Options:
-{options_text}
+A: {option_a}
+B: {option_b}
+C: {option_c}
 
 Answer:
 """
