@@ -175,13 +175,13 @@ ALL_MODEL_CONFIGS = [
     }
     },
     {
-        "config_id": "deepseek-r1-bedrock",
-        "type": "bedrock",
-        "model_id": "us.deepseek.r1-v1:0",
+        "config_id": "deepseek-r1",
+        "type": "groq",
+        "model_id": "deepseek-r1-distill-llama-70b",
         "parameters": {
-            "temperature": 0.3,
-            # "max_tokens": 10,
-            "top_p": 0.9
+            "temperature": 0.6,
+            "top_p": 0.9,
+            "max_tokens": 10
         }
     },
     {

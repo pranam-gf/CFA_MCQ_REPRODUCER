@@ -52,7 +52,7 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 CHARTS_DIR.mkdir(parents=True, exist_ok=True)
 
-FILLED_JSON_PATH = DATA_DIR / "updated_data.json" 
+FILLED_JSON_PATH = DATA_DIR / "final_data.json" 
 
 
 logging.basicConfig(

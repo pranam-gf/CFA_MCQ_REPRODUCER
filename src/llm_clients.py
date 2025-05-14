@@ -196,32 +196,6 @@ def get_llm_response(prompt: str, model_config: dict, is_json_response_expected:
                     else:
                         logger.debug(f"Retrieved token counts from headers for Bedrock Meta {config_id}.")
             
-            elif "deepseek" in model_id: 
-                
-                formatted_prompt = f"<｜begin of sentence｜> {prompt} ├think>\\n\\n"
-                
-                deepseek_params = parameters.copy()
-                deepseek_params.pop("response_format", None) 
-                
-                body = json.dumps({
-                    "prompt": formatted_prompt,
-                    **deepseek_params
-                })
-                
-                
-                api_response = bedrock_client.invoke_model(
-                    body=body, modelId=model_id, accept=accept, contentType=contentType
-                )
-                response_body = json.loads(api_response.get('body').read())
-                
-                
-                response_text_for_error = response_body.get('choices', [{}])[0].get('text', '')
-                
-                
-                input_tokens = None
-                output_tokens = None
-                logger.warning(f"Token counts are not available via InvokeModel API for Bedrock Deepseek {config_id}. Setting to None.")
-
             else:
                 logger.error(f"Unsupported Bedrock model provider for {config_id}")
                 return {"error_message": f"Unsupported Bedrock model: {config_id}", "response_time": 0}

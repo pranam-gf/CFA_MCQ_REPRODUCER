@@ -192,12 +192,14 @@ ALL_MODEL_CONFIGS_COT = [
         }
     },
     {
-        "config_id": "deepseek-r1-bedrock-cot",
-        "type": "bedrock",
-        "model_id": "us.deepseek.r1-v1:0", 
+        "config_id": "deepseek-r1-cot",
+        "type": "groq",
+        "model_id": "deepseek-r1-distill-llama-70b", 
+        "prompt_strategy_type": "COHERENT_CFA_COT",
         "parameters": {
-            "temperature": 0.3,
-            "top_p": 0.9
+            "temperature": 0.6,
+            "top_p": 0.9,
+            "max_tokens": 8192
         }
     },
     {
