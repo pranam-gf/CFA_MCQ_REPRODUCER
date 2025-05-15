@@ -44,7 +44,7 @@ ANTHROPIC_PRICING = {
         "prompt_tokens_cost_per_million": 3.00,
         "completion_tokens_cost_per_million": 15.00,
     },
-    "claude-3.5-haiku-20241022": {
+    "claude-3-5-haiku-20241022": {
         "prompt_tokens_cost_per_million": 0.80,
         "completion_tokens_cost_per_million": 4.00,
     },
