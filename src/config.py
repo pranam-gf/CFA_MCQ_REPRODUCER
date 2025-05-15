@@ -11,8 +11,8 @@ from dotenv import load_dotenv
 
 ENV_PATH = Path(__file__).resolve().parent.parent / '.env'
 if ENV_PATH.exists():
-    load_dotenv(dotenv_path=ENV_PATH)
-    logging.info(f".env file loaded from {ENV_PATH}")
+    load_dotenv(dotenv_path=ENV_PATH, override=True)
+    logging.info(f".env file loaded from {ENV_PATH} (with override)")
 else:
     logging.info(f".env file not found at {ENV_PATH}. Relying on system environment variables.")
 
@@ -50,14 +50,11 @@ CHARTS_DIR.mkdir(parents=True, exist_ok=True)
 
 FILLED_JSON_PATH = DATA_DIR / "final_data.json" 
 
-
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.StreamHandler(), 
-        
-        
+        logging.StreamHandler()
     ]
 )
 logger = logging.getLogger(__name__)
