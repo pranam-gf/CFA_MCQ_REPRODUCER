@@ -62,7 +62,8 @@ def _run_model_evaluations(
     processed_data: list, 
     selected_model_ids: list[str] | None, 
     strategy_key: str,
-    all_model_runs_summary: dict
+    all_model_runs_summary: dict,
+    use_cache: bool
 ) -> None:
     """
     Helper function to run evaluation for selected models and a specific strategy.
@@ -129,7 +130,7 @@ def _run_model_evaluations(
         elif is_self_discover_strategy and config_id_loop.endswith('-self-discover'):
              base_model_id_for_summary = config_id_loop[:-len('-self-discover')]
 
-        run_identifier_log = f"{config_id_loop}__{strategy_name_for_file}" 
+        run_identifier_log = f"{config_id_loop}__{strategy_name_for_file}"
         logger.info(f"\n{'='*20} Processing Model: {config_id_loop} ({model_type_loop}) with Strategy: {chosen_strategy['name']} {'='*20}")
         data_for_this_run = processed_data
         credentials_ok = True
@@ -146,25 +147,21 @@ def _run_model_evaluations(
                 logger.error(f"Skipping {config_id_loop}: Missing OpenAI API key.")
                 ui_utils.print_warning(f"Skipping {config_id_loop} (OpenAI): Missing OpenAI API key.")
                 credentials_ok = False
-
         elif model_type == 'gemini':
              if not config.GEMINI_API_KEY:
                 logger.error(f"Skipping {config_id_loop}: Missing Gemini API key.")
                 ui_utils.print_warning(f"Skipping {config_id_loop} (Gemini): Missing Gemini API key.")
                 credentials_ok = False
-
         elif model_type == 'xai':
             if not config.XAI_API_KEY:
                 logger.error(f"Skipping {config_id_loop}: Missing xAI API key.")
                 ui_utils.print_warning(f"Skipping {config_id_loop} (xAI): Missing xAI API key.")
                 credentials_ok = False
-
         elif model_type == 'writer':
              if not config.WRITER_API_KEY:
                 logger.error(f"Skipping {config_id_loop}: Missing Writer API key.")
                 ui_utils.print_warning(f"Skipping {config_id_loop} (Writer): Missing Writer API key.")
                 credentials_ok = False
-
         elif model_type == 'groq':
             if not config.GROQ_API_KEY:
                 logger.error(f"Skipping {config_id_loop}: Missing Groq API key.")
@@ -172,7 +169,6 @@ def _run_model_evaluations(
                 credentials_ok = False
 
         if not credentials_ok:
-            
             if base_model_id_for_summary not in all_model_runs_summary:
                 all_model_runs_summary[base_model_id_for_summary] = {}
             all_model_runs_summary[base_model_id_for_summary][chosen_strategy['name']] = {
@@ -180,39 +176,77 @@ def _run_model_evaluations(
             }
             continue
 
+        model_response_filename = config.RESULTS_DIR / f"response_data_{run_identifier_log}.json"
+        llm_run_results_data_from_cache = None
+        is_from_cache = False
+
+        if use_cache and model_response_filename.exists():
+            ui_utils.print_info(f"Found cached results for {run_identifier_log}. Attempting to load...")
+            logger.info(f"Attempting to load cached results for {run_identifier_log} from {model_response_filename}")
+            try:
+                with open(model_response_filename, 'r', encoding='utf-8') as f:
+                    loaded_data_temp = json.load(f)
+                if not isinstance(loaded_data_temp, list):
+                    logger.warning(f"Cached file {model_response_filename} for {run_identifier_log} does not contain a list. Invalidating for this run.")
+                    ui_utils.print_warning(f"Cached file for {run_identifier_log} is invalid. Will re-run.")
+                else:
+                    llm_run_results_data_from_cache = loaded_data_temp
+                    is_from_cache = True
+                    logger.info(f"Successfully loaded {len(llm_run_results_data_from_cache)} items from cached results for {run_identifier_log}.")
+                    ui_utils.print_success(f"Using cached results for {run_identifier_log}.")
+            except json.JSONDecodeError as e_json:
+                logger.error(f"JSONDecodeError loading cached results for {run_identifier_log} from {model_response_filename}: {e_json}. Will re-run.", exc_info=True)
+                ui_utils.print_error(f"Error decoding cached JSON for {run_identifier_log}. Will re-run.")
+            except Exception as e_load:
+                logger.error(f"Failed to load cached results for {run_identifier_log} from {model_response_filename}: {e_load}. Will re-run.", exc_info=True)
+                ui_utils.print_error(f"Error loading cached results for {run_identifier_log}. Will re-run.")
+
         run_start_time = time.time()
+        llm_run_results_data = None 
+        processing_animation = None 
+
         try:
-            logger.info(f"Processing {len(data_for_this_run)} questions with {config_id_loop} using {chosen_strategy['name']}...")
-            print(f"\nProcessing {len(data_for_this_run)} questions with {config_id_loop} using {chosen_strategy['name']}...")
-            processing_animation = ui_utils.LoadingAnimation(message=f"Processing with {config_id_loop} ({chosen_strategy['name']})")
-            processing_animation.start()
-            llm_run_results_data = strategy_func(data_for_this_run, model_config_item, **strategy_params)
+            if is_from_cache and llm_run_results_data_from_cache is not None:
+                llm_run_results_data = llm_run_results_data_from_cache
+            else:
+                logger.info(f"Processing {len(data_for_this_run)} questions with {config_id_loop} using {chosen_strategy['name']}...")
+                print(f"\nProcessing {len(data_for_this_run)} questions with {config_id_loop} using {chosen_strategy['name']}...")
+                processing_animation = ui_utils.LoadingAnimation(message=f"Processing with {config_id_loop} ({chosen_strategy['name']})")
+                processing_animation.start()
+                
+                llm_run_results_data = strategy_func(data_for_this_run, model_config_item, **strategy_params)
+                
+                if processing_animation: processing_animation.stop()
+                ui_utils.print_success(f"Completed processing {len(data_for_this_run)} questions with {config_id_loop} ({chosen_strategy['name']})")
+                
+                if llm_run_results_data:
+                    try:
+                        with open(model_response_filename, 'w', encoding='utf-8') as f:
+                            json.dump(llm_run_results_data, f, indent=4)
+                        logger.info(f"LLM responses for {run_identifier_log} saved to {model_response_filename}")
+                        ui_utils.print_success(f"Results for {run_identifier_log} saved.")
+                    except Exception as e_save:
+                        logger.error(f"Failed to save LLM results for {run_identifier_log} to {model_response_filename}: {e_save}", exc_info=True)
+                        ui_utils.print_error(f"Failed to save results for {run_identifier_log}.")
+                elif not is_from_cache:
+                    logger.warning(f"No data returned from strategy_func for {run_identifier_log}, so nothing to save.")
+
             run_end_time = time.time()
             total_run_time_seconds = run_end_time - run_start_time
-            processing_animation.stop()
-            ui_utils.print_success(f"Completed processing {len(data_for_this_run)} questions with {config_id_loop} ({chosen_strategy['name']})")
-
             
             resource_usage_metrics = {}
             if llm_run_results_data:
                 resource_usage_metrics = resource_eval.calculate_resource_usage(llm_run_results_data, model_config_item)
             else: 
                 resource_usage_metrics = resource_eval.calculate_resource_usage([], model_config_item)
-
-            model_response_filename = config.RESULTS_DIR / f"response_data_{run_identifier_log}.json"
-            try:
-                with open(model_response_filename, 'w', encoding='utf-8') as f:
-                    json.dump(llm_run_results_data, f, indent=4)
-                logger.info(f"LLM responses for {run_identifier_log} saved to {model_response_filename}")
-                ui_utils.print_success(f"Results for {run_identifier_log} saved.")
-            except Exception as e_save:
-                logger.error(f"Failed to save LLM results for {run_identifier_log} to {model_response_filename}: {e_save}", exc_info=True)
-                ui_utils.print_error(f"Failed to save results for {run_identifier_log}.")
-
+            
             if llm_run_results_data:
                 logger.info(f"Performing final evaluation on {run_identifier_log} results...")
-                print(f"Evaluating results for {run_identifier_log}...")
-                eval_loading = ui_utils.LoadingAnimation(message=f"Evaluating {run_identifier_log} results")
+                eval_loading_message = f"Evaluating results for {run_identifier_log}"
+                if is_from_cache:
+                    eval_loading_message = f"Evaluating cached results for {run_identifier_log}"
+                
+                eval_loading = ui_utils.LoadingAnimation(message=eval_loading_message)
                 eval_loading.start()
                 classification_metrics = classification_eval.evaluate_classification(llm_run_results_data)
                 eval_loading.stop()
@@ -228,19 +262,20 @@ def _run_model_evaluations(
 
                 if base_model_id_for_summary not in all_model_runs_summary:
                     all_model_runs_summary[base_model_id_for_summary] = {}
-
                 all_model_runs_summary[base_model_id_for_summary][chosen_strategy['name']] = individual_results
 
                 accuracy = classification_metrics.get('accuracy', 0.0)
                 logger.info(f"Evaluation summary for {run_identifier_log}: Accuracy: {accuracy:.4f}")
                 ui_utils.print_success(f"Evaluation complete for {run_identifier_log}: Accuracy: {accuracy:.4f}")
             else:
-                logger.warning(f"No results generated by {run_identifier_log}. Skipping evaluation.")
+                logger.warning(f"No results generated or loaded for {run_identifier_log}. Skipping evaluation.")
+                if not is_from_cache and processing_animation and processing_animation._thread and processing_animation._thread.is_alive():
+                    processing_animation.stop() 
                 
                 if base_model_id_for_summary not in all_model_runs_summary:
                     all_model_runs_summary[base_model_id_for_summary] = {}
                 all_model_runs_summary[base_model_id_for_summary][chosen_strategy['name']] = {
-                    "error": "No results generated",
+                    "error": "No results generated or loaded",
                     "num_processed": 0,
                     "total_run_time_s": total_run_time_seconds,
                     "config_id_used": config_id_loop
@@ -249,7 +284,7 @@ def _run_model_evaluations(
         except Exception as model_proc_err:
             run_end_time = time.time()
             total_run_time_seconds = run_end_time - run_start_time
-            if 'processing_animation' in locals() and processing_animation._thread and processing_animation._thread.is_alive():
+            if not is_from_cache and processing_animation and processing_animation._thread and processing_animation._thread.is_alive():
                 processing_animation.stop()
             logger.error(f"An error occurred while processing {run_identifier_log}: {model_proc_err}", exc_info=True)
             ui_utils.print_error(f"Error processing {run_identifier_log}: {model_proc_err}")
@@ -308,6 +343,23 @@ def main():
     all_model_runs_summary = {}
     logger.info("Determining evaluation run type...")
 
+    
+    use_cache_if_available = questionary.confirm(
+        "Do you want to use existing cached results (if available)? Choosing 'No' will re-run all evaluations.",
+        default=True
+    ).ask()
+
+    if use_cache_if_available is None: 
+        ui_utils.print_warning("Cache preference not selected. Exiting.")
+        return
+        
+    if use_cache_if_available:
+        ui_utils.print_info("Attempting to use cached results where available.")
+        logger.info("User opted to use cached results.")
+    else:
+        ui_utils.print_info("Running all evaluations from scratch. Existing cached results will be ignored and overwritten.")
+        logger.info("User opted to run evaluations from scratch.")
+
     run_mode = questionary.select(
         "Select run mode:",
         choices=[
@@ -338,7 +390,8 @@ def main():
                 processed_data=processed_data,
                 selected_model_ids=None, 
                 strategy_key=strategy_key_full,
-                all_model_runs_summary=all_model_runs_summary 
+                all_model_runs_summary=all_model_runs_summary,
+                use_cache=use_cache_if_available
             )
             print(f"--- Completed Full Eval: Strategy '{AVAILABLE_STRATEGIES[strategy_key_full]['name']}' ---")
 
@@ -397,7 +450,8 @@ def main():
                      processed_data=processed_data,
                      selected_model_ids=selected_model_ids, 
                      strategy_key=selected_strategy_key,
-                     all_model_runs_summary=all_model_runs_summary 
+                     all_model_runs_summary=all_model_runs_summary,
+                     use_cache=use_cache_if_available
                  )
                  print(f"--- Completed Custom Run: Strategy '{AVAILABLE_STRATEGIES[selected_strategy_key]['name']}' ---")
         else:
