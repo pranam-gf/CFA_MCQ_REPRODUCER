@@ -16,10 +16,7 @@ def generate_prompt_for_default_strategy(entry: dict, model_type: str | None = N
     """Generates the default prompt for the LLM using the standardized parser."""
     parsed_data = parse_question_data(entry)
     
-    template = default_prompts.DEFAULT_PROMPT_TEMPLATE
-    if model_type == "gemini":
-        template = default_prompts.GEMINI_PROMPT_TEMPLATE
-        
+    template = default_prompts.DEFAULT_PROMPT_TEMPLATE        
     return template.format(
         vignette=parsed_data['vignette'],
         question_stem=parsed_data['question_stem'],

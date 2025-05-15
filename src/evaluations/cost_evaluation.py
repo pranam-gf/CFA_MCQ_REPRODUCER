@@ -45,18 +45,14 @@ def calculate_model_cost(results_data: List[Dict[str, Any]], model_config_item: 
     pricing = get_pricing(model_type, model_id)
 
     if pricing:
-        if model_type == "openai":
-            price_per_input_token = pricing.get("input", 0.0)
-            price_per_output_token = pricing.get("output", 0.0)
-        else:
-            price_per_input_token = pricing.get("prompt_tokens_cost_per_million", 0.0) / 1_000_000
-            price_per_output_token = pricing.get("completion_tokens_cost_per_million", 0.0) / 1_000_000
+        price_per_input_token = pricing.get("prompt_tokens_cost_per_million", 0.0) / 1_000_000
+        price_per_output_token = pricing.get("completion_tokens_cost_per_million", 0.0) / 1_000_000
     else:
         logger.warning(f"Skipping cost calculation for run using model ID '{model_id}' (type: {model_type}) as pricing is not defined.")
         return {"total_cost": 0.0}
 
     if price_per_input_token == 0.0 and price_per_output_token == 0.0:
-        logger.warning(f"Both input and output token prices are zero for model '{model_id}' (type: {model_type}). Cost will be zero.")
+        logger.warning(f"Both input and output token prices are effectively zero for model '{model_id}' (type: {model_type}) after lookup. Cost will be zero.")
         return {"total_cost": 0.0}
     
     num_items_missing_tokens = 0

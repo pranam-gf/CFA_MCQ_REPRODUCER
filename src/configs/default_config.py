@@ -44,7 +44,7 @@ ALL_MODEL_CONFIGS = [
         "parameters": {
             "temperature": 0.1,
             "top_p": 0.9,
-            "max_tokens": 10
+            # "max_tokens": 10
         }
     },
     {
@@ -198,16 +198,6 @@ ALL_MODEL_CONFIGS = [
         "config_id": "groq-llama-4-scout",
         "type": "groq",
         "model_id": "meta-llama/llama-4-scout-17b-16e-instruct",
-        "parameters": {
-            "temperature": 0.1,
-            "top_p": 0.9,
-            "max_tokens": 10
-        }
-    },
-    {
-        "config_id": "groq-llama-guard-4",
-        "type": "groq",
-        "model_id": "meta-llama/Llama-Guard-4-12B",
         "parameters": {
             "temperature": 0.1,
             "top_p": 0.9,

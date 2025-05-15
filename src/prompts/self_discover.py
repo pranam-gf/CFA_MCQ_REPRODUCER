@@ -34,7 +34,7 @@ C: {option_c}
 
 **4. Final Answer:**
    Based on the reasoning, critically evaluate the options and provide the final answer.
-   **IMPORTANT**: Conclude your response with the final answer choice letter (A, B, C, or D) on a new line, formatted exactly as: `The final answer is: **[Option Letter]**` (e.g., `The final answer is: **B**`). Do not include any other text after this final line.
+   **IMPORTANT**: Conclude your response with the final answer choice letter (A, B, or C) on a new line, formatted exactly as: `The final answer is: **[Option Letter]**` (e.g., `The final answer is: **B**`). Do not include any other text after this final line.
    [Model provides final answer letter here in the specified format]
 
 **Begin Reasoning:**

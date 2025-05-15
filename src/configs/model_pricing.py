@@ -87,10 +87,6 @@ GROQ_PRICING = {
         "prompt_tokens_cost_per_million": 0.11,
         "completion_tokens_cost_per_million": 0.34,
     },
-    "meta-llama/Llama-Guard-4-12B": {
-        "prompt_tokens_cost_per_million": 0.20,
-        "completion_tokens_cost_per_million": 0.20,
-    },
     "deepseek-r1-distill-llama-70b": {
         "prompt_tokens_cost_per_million": 0.75,
         "completion_tokens_cost_per_million": 0.99,
@@ -109,7 +105,7 @@ MISTRAL_PRICING = {
 }
 
 WRITER_PRICING = {
-    "palmyra-fin-default": {
+    "palmyra-fin": {
         "prompt_tokens_cost_per_million": 5.00,
         "completion_tokens_cost_per_million": 12.00,
     }

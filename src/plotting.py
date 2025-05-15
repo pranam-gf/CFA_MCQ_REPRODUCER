@@ -612,21 +612,81 @@ def save_summary_metrics_to_csv(all_model_run_summaries: dict, results_output_di
         logger.error(f"Failed to save summary metrics CSV to {csv_file_path}: {e}", exc_info=True)
         ui_utils.print_error(f"Failed to save summary metrics CSV: {e}")
 
+def generate_reasoning_vs_non_reasoning_accuracy_plot(all_model_runs_summary: Dict[str, Any], output_dir: Union[str, Path]):
+    """Generates a violin plot comparing accuracy between reasoning and non-reasoning models."""
+    logger.info("Generating Reasoning vs Non-Reasoning Accuracy Distribution plot...")
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    plot_data = []
+    for model_id, strategies in all_model_runs_summary.items():
+        for strategy_name, metrics in strategies.items():
+            accuracy = metrics.get('accuracy')
+            model_type = metrics.get('model_type') # Relies on model_type being added in generate_plots_only.py
+            if accuracy is not None and model_type is not None:
+                plot_data.append({
+                    'Model ID': model_id,
+                    'Strategy': strategy_name,
+                    'Accuracy': float(accuracy),
+                    'Model Type': model_type
+                })
+    
+    if not plot_data:
+        logger.warning("No data found for Reasoning vs Non-Reasoning Accuracy plot. Skipping.")
+        return
+
+    df = pd.DataFrame(plot_data)
+    
+    if df.empty or 'Model Type' not in df.columns or df['Model Type'].nunique() < 2:
+        logger.warning("Not enough distinct model types or data to generate Reasoning vs Non-Reasoning Accuracy plot. Skipping.")
+        return
+
+    plt.figure(figsize=(8, 6))
+    ax = sns.violinplot(x='Model Type', y='Accuracy', data=df, palette=INSPIRED_PALETTE[:2], inner='quartile')
+    sns.stripplot(x='Model Type', y='Accuracy', data=df, color='.25', size=3, alpha=0.5, ax=ax) # Add individual points
+
+    ax.set_title('Accuracy Distribution: Reasoning vs. Non-Reasoning Models',
+                 fontsize=plt.rcParams["axes.titlesize"], pad=plt.rcParams["axes.titlepad"], loc='left', fontweight='bold')
+    ax.set_xlabel("Model Type")
+    ax.set_ylabel("Accuracy")
+    ax.yaxis.grid(True, linestyle='-', linewidth=0.5, alpha=0.7, color='lightgray')
+    ax.set_axisbelow(True)
+    ax.set_ylim(0, 1.05) # Accuracy typically between 0 and 1
+
+    plt.tight_layout()
+    try:
+        filename_png = output_dir / "reasoning_vs_non_reasoning_accuracy.png"
+        plt.savefig(filename_png, dpi=300, bbox_inches='tight')
+        logger.info(f"Saved Reasoning vs Non-Reasoning Accuracy plot to {filename_png}")
+        # If you also want an HTML version with plotly, that would require plotly specific code here.
+    except Exception as e:
+        logger.error(f"Error saving Reasoning vs Non-Reasoning Accuracy plot: {e}")
+    finally:
+        plt.close()
+
 def generate_all_charts(all_model_run_summaries: dict, charts_output_dir: Union[str, Path]):
     """
-    Generates all specified charts and saves them to the output directory.
-    Also saves the aggregated summary metrics to a CSV file in the parent results directory.
+    Generates all comparison charts based on the provided model run summaries.
     """
-    logger.info(f"Starting chart generation. Output directory: {charts_output_dir}")
-    print(f"Starting chart generation. Output directory: {charts_output_dir}")
-    
-    charts_dir = Path(charts_output_dir)
-    charts_dir.mkdir(parents=True, exist_ok=True)
-    results_dir = charts_dir.parent 
-    save_summary_metrics_to_csv(all_model_run_summaries, results_dir)
-    plot_df = _prepare_plot_data(all_model_run_summaries)
+    if not all_model_run_summaries:
+        logger.warning("No model run summaries available. Skipping chart generation.")
+        return
 
-    if plot_df is None or plot_df.empty:
+    # Ensure the main charts directory exists
+    charts_output_dir = Path(charts_output_dir)
+    charts_output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Generate the new plot specifically
+    try:
+        logger.info("Attempting to generate Reasoning vs Non-Reasoning Accuracy plot from generate_all_charts.")
+        generate_reasoning_vs_non_reasoning_accuracy_plot(all_model_run_summaries, charts_output_dir)
+    except Exception as e:
+        logger.error(f"Error calling generate_reasoning_vs_non_reasoning_accuracy_plot from generate_all_charts: {e}", exc_info=True)
+
+    # Prepare data for other plots
+    df = _prepare_plot_data(all_model_run_summaries)
+
+    if df is None or df.empty:
         logger.warning("Plotting skipped: No valid data prepared from summaries.")
         ui_utils.print_warning("Plotting skipped: No valid data prepared from summaries.")
         return
@@ -638,29 +698,29 @@ def generate_all_charts(all_model_run_summaries: dict, charts_output_dir: Union[
     key_metrics_for_strategy_comparison = [primary_metric, 'f1_score', latency_metric, cost_metric]
     for metric in key_metrics_for_strategy_comparison:
         logger.info(f"Generating strategy comparison plot for: {metric}")
-        _plot_metric_by_strategy_comparison(plot_df, charts_dir, metric)
+        _plot_metric_by_strategy_comparison(df, charts_output_dir, metric)
 
     logger.info("Generating SC-CoT N sample comparison plots...")
     sc_metrics = [primary_metric, latency_metric, cost_metric]
     for metric in sc_metrics:
-        _plot_sc_comparison(plot_df, charts_dir, metric=metric)
+        _plot_sc_comparison(df, charts_output_dir, metric=metric)
     
     logger.info("Generating trade-off scatter plots...")
-    _plot_scatter_tradeoff(plot_df, charts_dir, metric_y=primary_metric, metric_x=latency_metric) 
-    _plot_scatter_tradeoff(plot_df, charts_dir, metric_y=primary_metric, metric_x=cost_metric)    
-    _plot_scatter_tradeoff(plot_df, charts_dir, metric_y=latency_metric, metric_x=cost_metric)   
+    _plot_scatter_tradeoff(df, charts_output_dir, metric_y=primary_metric, metric_x=latency_metric) 
+    _plot_scatter_tradeoff(df, charts_output_dir, metric_y=primary_metric, metric_x=cost_metric)    
+    _plot_scatter_tradeoff(df, charts_output_dir, metric_y=latency_metric, metric_x=cost_metric)   
 
     logger.info("Generating average latency comparison plot...")
-    _plot_total_time_comparison(plot_df, charts_dir)    
+    _plot_total_time_comparison(df, charts_output_dir)    
     logger.info("Generating per-strategy metric comparison plots...")
-    all_strategies = plot_df['Strategy'].unique()
+    all_strategies = df['Strategy'].unique()
     metrics_per_strategy = [primary_metric, 'f1_score', latency_metric, cost_metric, 'total_tokens']
     for strategy in all_strategies:
          logger.debug(f"Generating plots for strategy: {strategy}")
          
-         available_metrics_for_strat = plot_df[(plot_df['Strategy'] == strategy) & (plot_df['Metric'].isin(metrics_per_strategy))]['Metric'].unique()
+         available_metrics_for_strat = df[(df['Strategy'] == strategy) & (df['Metric'].isin(metrics_per_strategy))]['Metric'].unique()
          if available_metrics_for_strat.size > 0:
-             _plot_metric_comparison_for_strategy(plot_df, strategy, list(available_metrics_for_strat), charts_dir)
+             _plot_metric_comparison_for_strategy(df, strategy, list(available_metrics_for_strat), charts_output_dir)
          else:
              logger.debug(f"No relevant metrics found for strategy '{strategy}' to plot per-strategy comparison.")
 
@@ -671,7 +731,7 @@ def generate_all_charts(all_model_run_summaries: dict, charts_output_dir: Union[
                 matrix = results['confusion_matrix']
                 labels = results['labels']
                 if matrix and labels: 
-                     _plot_confusion_matrix(matrix, labels, model_id, strategy_name, charts_dir)
+                     _plot_confusion_matrix(matrix, labels, model_id, strategy_name, charts_output_dir)
                 else:
                      logger.warning(f"Skipping confusion matrix for {model_id}/{strategy_name}: Empty matrix or labels.")
     

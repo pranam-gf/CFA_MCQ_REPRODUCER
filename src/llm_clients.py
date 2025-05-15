@@ -17,6 +17,8 @@ import tiktoken
 import time 
 import random
 from . import config
+import os
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -408,32 +410,84 @@ def get_llm_response(prompt: str, model_config: dict, is_json_response_expected:
                     logger.error(f"Missing Anthropic API key for model {config_id}.")
                     return {"error_message": "Missing Anthropic API key", "response_time": 0}
                 
-                anthropic_client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
+                api_key_name = "ANTHROPIC_API_KEY"
+                anthropic_api_key = os.getenv(api_key_name)
+                if not anthropic_api_key:
+                    raise ValueError(f"{api_key_name} not found in environment variables.")
+                
+                anthropic_client = anthropic.Anthropic(
+                    api_key=anthropic_api_key,
+                    timeout=httpx.Timeout(timeout=60.0 * 60.0) # Timeout for the overall operation
+                )
                 
                 anthropic_params = parameters.copy()
-                
-                
                 anthropic_params.pop('response_format', None) 
-                
-                
                 
                 if 'max_tokens' not in anthropic_params:
                     anthropic_params['max_tokens'] = 4096 
                     logger.warning(f"'max_tokens' not specified for Anthropic model {config_id}, defaulting to {anthropic_params['max_tokens']}.")
 
+                accumulated_text = ""
+                final_usage = {}
+
                 try:
-                    api_response = anthropic_client.messages.create(
+                    with anthropic_client.messages.stream(
                         model=model_id,
                         messages=[{"role": "user", "content": prompt}],
                         **anthropic_params
-                    )
-                    response_text_for_error = api_response.content[0].text if api_response.content else ""
+                    ) as stream:
+                        for event in stream:
+                            if event.type == "message_start":
+                                if event.message.usage:
+                                    input_tokens = event.message.usage.input_tokens
+                                    logger.info(f"Anthropic stream: input_tokens from message_start: {input_tokens}")
+                            elif event.type == "content_block_delta":
+                                if event.delta.type == "text_delta":
+                                    accumulated_text += event.delta.text
+                            elif event.type == "message_delta":
+                                if event.usage:
+                                    final_usage = event.usage # This is cumulative
+                                    output_tokens = event.usage.output_tokens 
+                                    logger.debug(f"Anthropic stream: cumulative output_tokens from message_delta: {output_tokens}")
+                            elif event.type == "message_stop":
+                                logger.info(f"Anthropic stream: message_stop event received.")
+                                if final_usage: # Ensure we have the latest usage
+                                    input_tokens = final_usage.input_tokens
+                                    output_tokens = final_usage.output_tokens
+                                    logger.info(f"Anthropic stream: final tokens from message_stop/delta: In={input_tokens}, Out={output_tokens}")
+                                else:
+                                    # Fallback if message_delta with usage wasn't the last thing seen before stop
+                                    # This might happen if the stream ends abruptly or if message_start was the only usage info
+                                    # For robustness, try to get from the final message object if available
+                                    final_message_obj = stream.get_final_message()
+                                    if final_message_obj and final_message_obj.usage:
+                                        input_tokens = final_message_obj.usage.input_tokens
+                                        output_tokens = final_message_obj.usage.output_tokens
+                                        logger.info(f"Anthropic stream: final tokens from get_final_message: In={input_tokens}, Out={output_tokens}")
+                                    elif not input_tokens and not output_tokens: # only log warning if we have no token info at all
+                                         logger.warning(f"Anthropic stream for {config_id}: Could not definitively get final token counts from message_stop or final_usage. Input: {input_tokens}, Output: {output_tokens}")
+
+
+                            elif event.type == "error":
+                                logger.error(f"Anthropic stream error for {config_id}: {event.error}")
+                                # Construct an error structure similar to non-streaming for consistency
+                                error_details = {"type": event.error.get("type", "stream_error"), "message": event.error.get("message", "Unknown stream error")}
+                                return {
+                                    "error_message": f"Anthropic Stream Error: {event.error.get('type', 'unknown')}",
+                                    "response_time": time.time() - start_time,
+                                    "details": error_details,
+                                    "raw_response_text": accumulated_text # return what was accumulated so far
+                                }
                     
-                    if api_response.usage:
-                        input_tokens = api_response.usage.input_tokens
-                        output_tokens = api_response.usage.output_tokens
-                    else:
-                        logger.warning(f"Token usage data not found in Anthropic response for {config_id}. Setting to None.")
+                    response_text_for_error = accumulated_text.strip()
+                    # Ensure token counts are set if stream ended without a final message_delta or explicit stop usage
+                    if not output_tokens and final_usage: # If final_usage was captured but not output_tokens specifically
+                        output_tokens = final_usage.output_tokens
+                    if not input_tokens and final_usage:
+                        input_tokens = final_usage.input_tokens
+                    
+                    logger.info(f"Anthropic stream completed for {config_id}. Final Input: {input_tokens}, Final Output: {output_tokens}. Response length: {len(response_text_for_error)}")
+
 
                 except anthropic.APIStatusError as e:
                     elapsed_time = time.time() - start_time

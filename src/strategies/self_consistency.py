@@ -16,12 +16,13 @@ logger = logging.getLogger(__name__)
 
 def extract_choice_letter_from_cot(text: str) -> str | None:
     """Extracts the final choice letter (A, B, C, D) from a CoT response."""
-    header_pattern = r"^(?:\#\#\# Conclusion|Conclusion:|\*\*Conclude:|Conclude:|Final Answer:|The final answer is:|My final choice is|The best choice is|The correct option is)[\s\S]*?"
+    header_pattern = r"^(?:\\#\\#\\# Conclusion|Conclusion:|\\*\\*Conclude:|Conclude:|Final Answer:|The final answer is:|My final choice is|The best choice is|The correct option is)[\\s\\S]*?"
     answer_formats_after_header = [
-        r"\*\*([A-D])\*\*[:\.\)]?",            
-        r"\b([A-D])[:\.\)]",                 
-        r"letter\s+([A-D])\b",             
-        r"is\s+([A-D])\b"                  
+        r"\\*\\*([A-D])\\*\\*[:\\.\\)]?",        
+        r"\\s*([A-D])\\b",                      
+        r"\\b([A-D])[:\\.\\)]",               
+        r"letter\\s+([A-D])\\b",             
+        r"is\\s+([A-D])\\b"                  
     ]
     for ans_fmt in answer_formats_after_header:
         full_pattern = header_pattern + ans_fmt

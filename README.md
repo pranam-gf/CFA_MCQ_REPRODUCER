@@ -25,8 +25,8 @@ This comprehensive LLM benchmark evaluates the performance of state-of-the-art l
 <tbody>
 <tr>
 <td align="center"><strong>Models</strong></td>
-<td>Claude-3.7-Sonnet, Claude-3.5-Sonnet, Claude-3.5-Haiku, Mistral-Large, Codestral, Palmyra-fin, GPT-4o, O3-mini, O4-mini, GPT-4.1, GPT-4.1-mini, GPT-4.1-nano, Grok-3, Grok-3-mini-beta (high/low effort), Gemini-2.5-Pro, Gemini-2.5-Flash, Deepseek-R1, Llama-4-Maverick, Llama-4-Scout, Llama-Guard-4, Llama-3.3-70B, Llama-3.1-8B-instant</td>
-<td align="center"><strong>22+</strong></td>
+<td>Claude-3.7-Sonnet, Claude-3.5-Sonnet, Claude-3.5-Haiku, Mistral-Large, Codestral, Palmyra-fin, GPT-4o, O3-mini, O4-mini, GPT-4.1, GPT-4.1-mini, GPT-4.1-nano, Grok-3, Grok-3-mini-beta (high/low effort), Gemini-2.5-Pro, Gemini-2.5-Flash, Deepseek-R1, Llama-4-Maverick, Llama-4-Scout, Llama-3.3-70B, Llama-3.1-8B-instant</td>
+<td align="center"><strong>21+</strong></td>
 </tr>
 <tr>
 <td align="center"><strong>Strategies</strong></td>
@@ -46,7 +46,7 @@ This comprehensive LLM benchmark evaluates the performance of state-of-the-art l
 </tbody>
 </table>
 
-This benchmark analyzes over 22 state-of-the-art LLMs across multiple reasoning strategies, measuring 11 performance metrics, and generating 15+ detailed visualization plots to evaluate and compare their performance on CFA multiple-choice questions.
+This benchmark analyzes over 21 state-of-the-art LLMs across multiple reasoning strategies, measuring 11 performance metrics, and generating 15+ detailed visualization plots to evaluate and compare their performance on CFA multiple-choice questions.
 
 ## Project Structure
 
@@ -56,6 +56,7 @@ CFA_MCQ_REPRODUCER/
 │   └── updated_data.json  # Input MCQ data (questions, correct answers)
 ├── results/
 │   ├── comparison_charts/ # Output charts comparing model performance
+│   ├── json_plot_charts/ # Output charts comparing model performance
 │   └── *.json             # Raw JSON outputs for each model run
 ├── src/
 │   ├── __init__.py

@@ -203,16 +203,6 @@ SELF_DISCOVER_CONFIGS = [
         }
     },
     {
-        "config_id": "groq-llama-guard-4",
-        "type": "groq",
-        "model_id": "meta-llama/Llama-Guard-4-12B",
-        "parameters": {
-            "temperature": 0.1,
-            "top_p": 0.9,
-            "max_tokens": 128
-        }
-    },
-    {
         "config_id": "groq-llama3.3-70b-self-discover",
         "type": "groq",
         "model_id": "llama-3.3-70b-versatile",
