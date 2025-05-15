@@ -172,9 +172,6 @@ def get_llm_response(prompt: str, model_config: dict, is_json_response_expected:
                 
                 if thinking_budget_value is not None:
                     thinking_config = genai.types.ThinkingConfig(thinking_budget=thinking_budget_value)
-                    
-                    
-                    
                     final_generation_config = genai.types.GenerateContentConfig(
                         candidate_count=final_generation_config.candidate_count,
                         stop_sequences=final_generation_config.stop_sequences,
@@ -182,66 +179,52 @@ def get_llm_response(prompt: str, model_config: dict, is_json_response_expected:
                         temperature=final_generation_config.temperature,
                         top_p=final_generation_config.top_p,
                         top_k=final_generation_config.top_k,
-                        
                         thinking_config=thinking_config
                     )
 
                 logger.debug(f"Gemini prompt for {config_id}:\n{prompt[:200]}...")
+                logger.info(f"Gemini final_generation_config for {config_id}: {final_generation_config}")
                 
                 try:
                     api_response = gemini_model_instance.generate_content(
-                        prompt,
+                        contents=[prompt],
                         generation_config=final_generation_config
                     )
                     logger.debug(f"Gemini raw api_response object for {config_id}: {api_response}")
                     
-                    response_text_for_error = ""
-                    if hasattr(api_response, 'text') and api_response.text:
-                        response_text_for_error = api_response.text.strip()
-                        logger.debug(f"Extracted response via api_response.text for {config_id}")
-                    elif hasattr(api_response, 'candidates') and api_response.candidates:
-                        try:
-                            candidate = api_response.candidates[0]
-                            logger.debug(f"Examining candidate for {config_id}: {candidate}")
+                    if hasattr(api_response, 'text'):
+                        raw_text_from_api = api_response.text 
+                        if raw_text_from_api is not None:
+                            response_text_for_error = raw_text_from_api.strip()
+                            logger.info(f"Extracted text for {config_id} via api_response.text. Length: {len(response_text_for_error)}. Snippet: '{response_text_for_error[:100]}...'")
+                        else:
+                            response_text_for_error = ""
+                            logger.warning(f"api_response.text is None for {config_id}. Will check for blocking. Defaulting response text to empty string.")
+                    else:
+                        response_text_for_error = ""
+                        logger.warning(f"api_response.text attribute missing for {config_id}. Defaulting response text to empty string.")
+
+                    if hasattr(api_response, 'prompt_feedback') and api_response.prompt_feedback:
+                        block_reason = getattr(api_response.prompt_feedback, 'block_reason', None)
+                        if block_reason:
+                            safety_ratings_details_list = getattr(api_response.prompt_feedback, 'safety_ratings', [])
+                            safety_ratings_str = "; ".join([str(rating) for rating in safety_ratings_details_list])
                             
-                            if hasattr(candidate, 'content') and candidate.content:
-                                logger.debug(f"Candidate content for {config_id}: {candidate.content}")
-                                
-                                if hasattr(candidate.content, 'parts') and candidate.content.parts:
-                                    logger.debug(f"Content parts for {config_id}: {candidate.content.parts}")
-                                    
-                                    if hasattr(candidate.content.parts[0], 'text'):
-                                        response_text_for_error = candidate.content.parts[0].text.strip()
-                                        logger.debug(f"Successfully extracted text from parts for {config_id}: {response_text_for_error[:50]}...")
-                                    else:
-                                        logger.warning(f"Gemini candidate {config_id} content part has no text attribute: {candidate.content.parts[0]}")
-                                        
-                                        response_text_for_error = str(candidate.content.parts[0])
-                                        logger.debug(f"Using string representation instead: {response_text_for_error[:50]}...")
-                        
-                            if hasattr(candidate, 'finish_reason'):
-                                 logger.info(f"Gemini candidate finish_reason for {config_id}: {candidate.finish_reason}")
-                        except Exception as e_parse_candidate:
-                            logger.warning(f"Error parsing Gemini candidate for {config_id}: {e_parse_candidate}")
-                            logger.debug("Full response object structure:", exc_info=True)
+                            error_message_on_block = f"Gemini content blocked: {block_reason}. Details: {safety_ratings_str}"
+                            logger.error(f"Error for {config_id}: {error_message_on_block}")
+                            return {"error_message": error_message_on_block,
+                                    "response_time": time.time() - start_time,
+                                    "details": {"type": "ContentBlocked", "reason": str(block_reason), "safety_ratings": safety_ratings_str},
+                                    "raw_response_text": response_text_for_error 
+                                   }
                     
                     if not response_text_for_error:
-                        
-                        try:
-                            response_text_for_error = str(api_response)
-                            logger.warning(f"Using full object string representation for {config_id} as text was empty: {response_text_for_error[:100]}...")
-                        except:
-                            logger.warning(f"Gemini response text is empty for {config_id} and string representation failed.")
-                        
-                        if hasattr(api_response, 'prompt_feedback') and api_response.prompt_feedback:
-                            block_reason = getattr(api_response.prompt_feedback, 'block_reason', None)
-                            if block_reason:
-                                logger.error(f"Gemini content blocked for {config_id}. Reason: {block_reason} - Details: {api_response.prompt_feedback.safety_ratings}")
-                                return {"error_message": f"Gemini content blocked: {block_reason}", 
-                                        "response_time": time.time() - start_time,
-                                        "details": api_response.prompt_feedback.safety_ratings}
+                         finish_reason_from_candidate = "Unknown"
+                         if hasattr(api_response, 'candidates') and api_response.candidates and \
+                            len(api_response.candidates) > 0 and hasattr(api_response.candidates[0], 'finish_reason'):
+                             finish_reason_from_candidate = str(api_response.candidates[0].finish_reason)
+                         logger.warning(f"Gemini response text is empty for {config_id}. Finish reason (from candidate, if available): {finish_reason_from_candidate}. This is expected if MAX_TOKENS is hit before output, or model chose to output nothing.")
 
-                    logger.info(f"Gemini raw response text for {config_id}: {response_text_for_error[:200]}...")
                     if hasattr(api_response, 'usage_metadata') and api_response.usage_metadata:
                         input_tokens = api_response.usage_metadata.prompt_token_count
                         output_tokens = api_response.usage_metadata.candidates_token_count
@@ -252,8 +235,9 @@ def get_llm_response(prompt: str, model_config: dict, is_json_response_expected:
 
                 except Exception as e:
                     elapsed_time = time.time() - start_time
-                    logger.error(f"Gemini API Error for {config_id} after {elapsed_time:.2f}s: {e}. Raw response snippet: {response_text_for_error[:100]}...", exc_info=True)
-                    return {"error_message": str(e), "response_time": elapsed_time, "raw_response_text": response_text_for_error, "details": {"type": type(e).__name__, "unexpected": True}}
+                    current_response_text_snippet = response_text_for_error[:100] if 'response_text_for_error' in locals() and response_text_for_error else "N/A"
+                    logger.error(f"Gemini API Error for {config_id} after {elapsed_time:.2f}s: {e}. Raw response snippet: {current_response_text_snippet}...", exc_info=True)
+                    return {"error_message": str(e), "response_time": elapsed_time, "raw_response_text": response_text_for_error if 'response_text_for_error' in locals() else "Error before text extraction", "details": {"type": type(e).__name__, "unexpected": True}}
 
             elif model_type == "writer":
                 if not config.WRITER_API_KEY:

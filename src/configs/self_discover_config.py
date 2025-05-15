@@ -144,7 +144,7 @@ SELF_DISCOVER_CONFIGS = [
     {
     "config_id": "gemini-2.5-pro-self-discover",
     "type": "gemini",
-    "model_id": "gemini-2.5-pro-exp-03-25",
+    "model_id": "gemini-2.5-pro-preview-05-06",
     "parameters": {
         "temperature": 0.1,
         "top_p": 0.95,
