@@ -1,3 +1,9 @@
+import sys
+import os
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 import json
 import logging
 import re
@@ -12,9 +18,9 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 logger = logging.getLogger(__name__)
 
 ALL_MODEL_CONFIG_LISTS = {
-    "default": default_config.ALL_MODEL_CONFIGS,
-    "cot": cot_config.ALL_MODEL_CONFIGS if hasattr(cot_config, 'ALL_MODEL_CONFIGS') else [], 
-    "self_discover": self_discover_config.ALL_MODEL_CONFIGS if hasattr(self_discover_config, 'ALL_MODEL_CONFIGS') else []
+    "default": default_config.ALL_MODEL_CONFIGS if hasattr(default_config, 'ALL_MODEL_CONFIGS') else [],
+    "cot": cot_config.ALL_MODEL_CONFIGS_COT if hasattr(cot_config, 'ALL_MODEL_CONFIGS_COT') else [], 
+    "self_discover": self_discover_config.SELF_DISCOVER_CONFIGS if hasattr(self_discover_config, 'SELF_DISCOVER_CONFIGS') else []
 }
 
 REASONING_MODEL_CONFIG_IDS = [

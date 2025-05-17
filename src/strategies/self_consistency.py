@@ -14,8 +14,13 @@ from ..utils.prompt_utils import parse_question_data
 
 logger = logging.getLogger(__name__)
 
-def extract_choice_letter_from_cot(text: str) -> str | None:
-    """Extracts the final choice letter (A, B, C, D) from a CoT response."""
+def extract_choice_letter_from_cot(text: str, model_config_id: str = "unknown_model_cot") -> str | None:
+    """Extracts the final choice letter (A, B, C, D) from a CoT response, focusing on the last 100 characters."""
+    if not text:
+        return None
+
+    search_text = text[-100:]
+    logger.debug(f"CoT-specific extraction for {model_config_id} focusing on last 100 chars: '{search_text}...'")
     header_pattern = r"^(?:\\#\\#\\# Conclusion|Conclusion:|\\*\\*Conclude:|Conclude:|Final Answer:|The final answer is:|My final choice is|The best choice is|The correct option is)[\\s\\S]*?"
     answer_formats_after_header = [
         r"\\*\\*([A-D])\\*\\*[:\\.\\)]?",        
@@ -26,10 +31,10 @@ def extract_choice_letter_from_cot(text: str) -> str | None:
     ]
     for ans_fmt in answer_formats_after_header:
         full_pattern = header_pattern + ans_fmt
-        conclusion_match = re.search(full_pattern, text, re.IGNORECASE | re.MULTILINE)
+        conclusion_match = re.search(full_pattern, search_text, re.IGNORECASE | re.MULTILINE)
         if conclusion_match:
             letter = conclusion_match.group(1).upper()
-            logger.debug(f"Extracted letter '{letter}' using Pattern 1 ({ans_fmt=}) from CoT: ...{text[-180:]}")
+            logger.debug(f"Extracted letter '{letter}' using Pattern 1 ({ans_fmt=}) from CoT (last 100 chars) for {model_config_id}")
             return letter
 
     direct_choice_patterns = [
@@ -40,13 +45,13 @@ def extract_choice_letter_from_cot(text: str) -> str | None:
         r"^\s*The (?:best|correct|final) (?:answer|option|choice) is\s+([A-D])\b"    
     ]
     for pattern in direct_choice_patterns:
-        match = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
+        match = re.search(pattern, search_text, re.IGNORECASE | re.MULTILINE)
         if match:
             
             for group_val in match.groups(): 
                 if group_val:
                     letter = group_val.upper()
-                    logger.debug(f"Extracted letter '{letter}' using Pattern 2 ({pattern=}) from CoT: ...{text[-180:]}")
+                    logger.debug(f"Extracted letter '{letter}' using Pattern 2 ({pattern=}) from CoT (last 100 chars) for {model_config_id}")
                     return letter
     general_keyword_match = re.search(
         r"(?:Answer|Choice|Option) DNE\b" + 
@@ -55,30 +60,30 @@ def extract_choice_letter_from_cot(text: str) -> str | None:
         r"|\b([A-D])\.\s*\(?\w*\s*\w*\s*\w*\)?(?:\s+is correct|\s+is the answer)?" + 
         r"|\b([A-D])\s+is the correct answer\b" +
         r"|\b(?:The best answer is letter |The final answer is |My final choice is )([A-D])\b",
-        text,
+        search_text,
         re.IGNORECASE | re.MULTILINE
     )
     if general_keyword_match:
         for group in general_keyword_match.groups():
             if group:
                 letter = group.upper()
-                logger.debug(f"Extracted letter '{letter}' using Pattern 3 (general keywords) from CoT: ...{text[-100:]}")
+                logger.debug(f"Extracted letter '{letter}' using Pattern 3 (general keywords) from CoT (last 100 chars) for {model_config_id}")
                 return letter
     
     end_of_text_match = re.search(
         r"(?:\b([A-D])\s*[\.\!\?]?\s*$)" + 
         r"|(?:^\s*([A-D])\s*[\.\!\?]?\s*$)",  
-        text.strip(), 
+        search_text.strip(), 
         re.IGNORECASE | re.MULTILINE
     )
     if end_of_text_match:
         for group in end_of_text_match.groups():
             if group:
                 letter = group.upper()
-                logger.debug(f"Extracted letter '{letter}' using Pattern 4 (end_of_text_match) from CoT: ...{text[-100:]}")
+                logger.debug(f"Extracted letter '{letter}' using Pattern 4 (end_of_text_match) from CoT (last 100 chars) for {model_config_id}")
                 return letter
 
-    logger.warning(f"Could not extract choice letter from CoT response: ...{text[-180:]}")
+    logger.warning(f"Could not extract choice letter from CoT response (last 100 chars) for {model_config_id}: '{search_text}...'")
     return None 
 
 def generate_prompt_for_cot_strategy(entry: dict, cot_template: str) -> str:
@@ -144,7 +149,7 @@ def run_self_consistency_strategy(data: list[dict], model_config_item: dict, cot
 
             if llm_call_data and not llm_call_data.get("error_message"):
                 raw_text = llm_call_data.get('raw_response_text', '')
-                letter = extract_choice_letter_from_cot(raw_text)
+                letter = extract_choice_letter_from_cot(raw_text, config_id)
                 if letter: 
                     all_llm_answers_this_question.append(letter)
                 

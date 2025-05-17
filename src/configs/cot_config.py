@@ -25,7 +25,7 @@ ALL_MODEL_CONFIGS_COT = [
             "top_p": 0.95,
             "top_k": 64,
             "max_tokens": 65536,
-            "thinking_budget": 4096 #24576
+            "thinking_budget": 24576
         }
     },
     {
@@ -103,7 +103,6 @@ ALL_MODEL_CONFIGS_COT = [
         "prompt_strategy_type": "COHERENT_CFA_COT",
         "parameters": {
             "temperature": 0.5,
-            # "max_tokens": 1500,
             "response_format": {"type": "json_object"}
         }
     },
@@ -114,7 +113,6 @@ ALL_MODEL_CONFIGS_COT = [
         "prompt_strategy_type": "COHERENT_CFA_COT",
         "parameters": {
             "temperature": 0.5,
-            # "max_tokens": 1000,
             "response_format": {"type": "json_object"}
         }
     },

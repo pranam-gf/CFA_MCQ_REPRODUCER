@@ -6,7 +6,8 @@ import json
 import logging
 import re
 from openai import OpenAI, APIError, RateLimitError, APIConnectionError
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from writerai import Writer
 from groq import Groq
 import anthropic
@@ -21,7 +22,6 @@ import os
 import httpx
 
 logger = logging.getLogger(__name__)
-
 
 MAX_RETRIES = 3
 BASE_DELAY = 1 
@@ -87,7 +87,6 @@ def get_llm_response(prompt: str, model_config: dict, is_json_response_expected:
     output_tokens = None
     response_text_for_error = "N/A"
     elapsed_time = 0
-    
     for attempt in range(MAX_RETRIES):
         try:
             if model_type == "openai":
@@ -101,8 +100,6 @@ def get_llm_response(prompt: str, model_config: dict, is_json_response_expected:
                      pass
                 else:
                     openai_params.pop('response_format', None)
-
-                
                 try:
                     api_response = openai_client.chat.completions.create(
                         model=model_id,
@@ -162,35 +159,52 @@ def get_llm_response(prompt: str, model_config: dict, is_json_response_expected:
                 if not config.GEMINI_API_KEY:
                     logger.error(f"Missing Gemini API key for model {config_id}.")
                     return {"error_message": "Missing Gemini API key", "response_time": 0}
-                genai.configure(api_key=config.GEMINI_API_KEY)
-                gemini_model_instance = genai.GenerativeModel(model_id)
                 
-                gemini_params = parameters.copy()
-                gen_config_params = {k: v for k,v in gemini_params.items() if k in ["temperature", "top_p", "top_k", "max_output_tokens"]}
-                
-                thinking_budget_value = gemini_params.get("thinking_budget")
-                
-                final_generation_config = genai.types.GenerationConfig(**gen_config_params)
-                
-                if thinking_budget_value is not None:
-                    thinking_config = genai.types.ThinkingConfig(thinking_budget=thinking_budget_value)
-                    final_generation_config = genai.types.GenerateContentConfig(
-                        candidate_count=final_generation_config.candidate_count,
-                        stop_sequences=final_generation_config.stop_sequences,
-                        max_output_tokens=final_generation_config.max_output_tokens,
-                        temperature=final_generation_config.temperature,
-                        top_p=final_generation_config.top_p,
-                        top_k=final_generation_config.top_k,
-                        thinking_config=thinking_config
-                    )
+                gemini_client = genai.Client(api_key=config.GEMINI_API_KEY)
 
-                logger.debug(f"Gemini prompt for {config_id}:\n{prompt[:200]}...")
-                logger.info(f"Gemini final_generation_config for {config_id}: {final_generation_config}")
+                gemini_params_from_config = parameters.copy()
+                
+                gen_config_args = {
+                    k: v for k, v in gemini_params_from_config.items() 
+                    if k in ["temperature", "top_p", "top_k", "max_output_tokens", "candidate_count", "stop_sequences"] and v is not None
+                }
+                
+                thinking_budget_value = gemini_params_from_config.get("thinking_budget")
+                final_api_call_config = None
+
+                if thinking_budget_value is not None:
+                    try:
+                        thinking_config_obj = types.ThinkingConfig(thinking_budget=thinking_budget_value)
+                        final_api_call_config = types.GenerateContentConfig(
+                            **gen_config_args,
+                            thinking_config=thinking_config_obj
+                        )
+                        logger.info(f"Gemini model {config_id}: Using GenerateContentConfig with ThinkingConfig (budget: {thinking_budget_value}) and other args: {gen_config_args}")
+                    except AttributeError as e:
+                        logger.warning(
+                            f"AttributeError when creating ThinkingConfig/GenerateContentConfig for Gemini model {config_id}: {e}. "
+                            f"This suggests 'types.ThinkingConfig' or 'types.GenerateContentConfig' is not available. "
+                            f"The 'thinking_budget' will be ignored. Falling back to plain dict for config."
+                        )
+                        final_api_call_config = gen_config_args
+                    except Exception as e_other_config:
+                        logger.warning(
+                            f"Unexpected error ({type(e_other_config).__name__}) when setting up GenerateContentConfig with ThinkingConfig for {config_id}: {e_other_config}. "
+                            f"Falling back to plain dict for config."
+                        )
+                        final_api_call_config = gen_config_args
+                else:
+                    final_api_call_config = gen_config_args if gen_config_args else None 
+                    logger.info(f"Gemini model {config_id}: No 'thinking_budget' provided. Config: {final_api_call_config}")
+
+                logger.debug(f"Gemini prompt for {config_id}:\\n{prompt[:200]}...")
+                logger.info(f"Gemini API call config for {config_id}: {final_api_call_config}")
                 
                 try:
-                    api_response = gemini_model_instance.generate_content(
+                    api_response = gemini_client.models.generate_content(
+                        model=model_id, 
                         contents=[prompt],
-                        generation_config=final_generation_config
+                        config=final_api_call_config
                     )
                     logger.debug(f"Gemini raw api_response object for {config_id}: {api_response}")
                     
@@ -228,12 +242,33 @@ def get_llm_response(prompt: str, model_config: dict, is_json_response_expected:
                          logger.warning(f"Gemini response text is empty for {config_id}. Finish reason (from candidate, if available): {finish_reason_from_candidate}. This is expected if MAX_TOKENS is hit before output, or model chose to output nothing.")
 
                     if hasattr(api_response, 'usage_metadata') and api_response.usage_metadata:
-                        input_tokens = api_response.usage_metadata.prompt_token_count
-                        output_tokens = api_response.usage_metadata.candidates_token_count
-                        if output_tokens is None and hasattr(api_response.usage_metadata, 'total_token_count'): 
-                            output_tokens = api_response.usage_metadata.total_token_count - (input_tokens or 0)
+                        usage_meta = api_response.usage_metadata
+                        input_tokens = getattr(usage_meta, 'prompt_token_count', None)
+                        
+                        thoughts_tokens = getattr(usage_meta, 'thoughts_token_count', 0) or 0
+                        candidates_tokens = getattr(usage_meta, 'candidates_token_count', 0) or 0
+                        
+                        output_tokens = thoughts_tokens + candidates_tokens
+
+                        if thoughts_tokens > 0:
+                            logger.info(f"Gemini usage for {config_id}: Input={input_tokens}, Candidates={candidates_tokens}, Thoughts={thoughts_tokens}, Calculated Output (Candidates+Thoughts)={output_tokens}")
+                        else:
+                            logger.info(f"Gemini usage for {config_id}: Input={input_tokens}, Candidates={candidates_tokens} (No thoughts tokens reported), Calculated Output={output_tokens}")
+
+                        if output_tokens == 0 and input_tokens is not None and hasattr(usage_meta, 'total_token_count') and usage_meta.total_token_count is not None:
+                            inferred_output_tokens = usage_meta.total_token_count - input_tokens
+                            if inferred_output_tokens >= 0:
+                                output_tokens = inferred_output_tokens
+                                logger.warning(f"Gemini for {config_id}: Output tokens (candidates + thoughts) inferred from total_token_count as {output_tokens} because direct candidate/thoughts tokens were zero/missing.")
+                            else:
+                                logger.warning(f"Gemini for {config_id}: Cannot infer output tokens as total_token_count ({usage_meta.total_token_count}) < prompt_token_count ({input_tokens}).")
+                        elif output_tokens == 0 and (thoughts_tokens == 0 and candidates_tokens == 0):
+                             logger.warning(f"Gemini for {config_id}: Calculated output_tokens is 0. Direct thoughts_tokens and candidates_tokens were also 0. Total_token_count fallback not applicable or also resulted in 0.")
+
                     else: 
-                        logger.warning(f"Gemini token count not found via usage_metadata for {config_id}. Setting to None.")
+                        logger.warning(f"Gemini token count not found via usage_metadata for {config_id}. Setting input/output tokens to None.")
+                        input_tokens = None
+                        output_tokens = None
 
                 except Exception as e:
                     elapsed_time = time.time() - start_time
@@ -388,12 +423,12 @@ def get_llm_response(prompt: str, model_config: dict, is_json_response_expected:
                 mistral_client = MistralClient(api_key=config.MISTRAL_API_KEY)
                 
                 mistral_params = parameters.copy()
-                # Mistral API does not support response_format in the same way as OpenAI for Chat Completions
+                
                 mistral_params.pop('response_format', None)
 
                 api_response = mistral_client.chat(
                     model=model_id,
-                    messages=[anthropic.types.MessageParam(role="user", content=prompt)], # Using anthropic type for messages for now
+                    messages=[anthropic.types.MessageParam(role="user", content=prompt)], 
                     **mistral_params
                 )
                 response_text_for_error = api_response.choices[0].message.content.strip() if api_response.choices and api_response.choices[0].message else ""
@@ -417,7 +452,7 @@ def get_llm_response(prompt: str, model_config: dict, is_json_response_expected:
                 
                 anthropic_client = anthropic.Anthropic(
                     api_key=anthropic_api_key,
-                    timeout=httpx.Timeout(timeout=60.0 * 60.0) # Timeout for the overall operation
+                    timeout=httpx.Timeout(timeout=60.0 * 60.0) 
                 )
                 
                 anthropic_params = parameters.copy()
@@ -428,7 +463,8 @@ def get_llm_response(prompt: str, model_config: dict, is_json_response_expected:
                     logger.warning(f"'max_tokens' not specified for Anthropic model {config_id}, defaulting to {anthropic_params['max_tokens']}.")
 
                 accumulated_text = ""
-                final_usage = {}
+                current_input_tokens = None
+                current_output_tokens = None
 
                 try:
                     with anthropic_client.messages.stream(
@@ -438,56 +474,48 @@ def get_llm_response(prompt: str, model_config: dict, is_json_response_expected:
                     ) as stream:
                         for event in stream:
                             if event.type == "message_start":
-                                if event.message.usage:
-                                    input_tokens = event.message.usage.input_tokens
-                                    logger.info(f"Anthropic stream: input_tokens from message_start: {input_tokens}")
+                                if event.message.usage and hasattr(event.message.usage, 'input_tokens'):
+                                    current_input_tokens = event.message.usage.input_tokens
+                                    logger.info(f"Anthropic stream: input_tokens from message_start: {current_input_tokens}")
                             elif event.type == "content_block_delta":
                                 if event.delta.type == "text_delta":
                                     accumulated_text += event.delta.text
                             elif event.type == "message_delta":
-                                if event.usage:
-                                    final_usage = event.usage # This is cumulative
-                                    output_tokens = event.usage.output_tokens 
-                                    logger.debug(f"Anthropic stream: cumulative output_tokens from message_delta: {output_tokens}")
+                                if event.usage and hasattr(event.usage, 'output_tokens'):
+                                    current_output_tokens = event.usage.output_tokens 
+                                    logger.debug(f"Anthropic stream: cumulative output_tokens from message_delta: {current_output_tokens}")
                             elif event.type == "message_stop":
                                 logger.info(f"Anthropic stream: message_stop event received.")
-                                if final_usage: # Ensure we have the latest usage
-                                    input_tokens = final_usage.input_tokens
-                                    output_tokens = final_usage.output_tokens
-                                    logger.info(f"Anthropic stream: final tokens from message_stop/delta: In={input_tokens}, Out={output_tokens}")
-                                else:
-                                    # Fallback if message_delta with usage wasn't the last thing seen before stop
-                                    # This might happen if the stream ends abruptly or if message_start was the only usage info
-                                    # For robustness, try to get from the final message object if available
-                                    final_message_obj = stream.get_final_message()
-                                    if final_message_obj and final_message_obj.usage:
-                                        input_tokens = final_message_obj.usage.input_tokens
-                                        output_tokens = final_message_obj.usage.output_tokens
-                                        logger.info(f"Anthropic stream: final tokens from get_final_message: In={input_tokens}, Out={output_tokens}")
-                                    elif not input_tokens and not output_tokens: # only log warning if we have no token info at all
-                                         logger.warning(f"Anthropic stream for {config_id}: Could not definitively get final token counts from message_stop or final_usage. Input: {input_tokens}, Output: {output_tokens}")
-
+                                final_message_obj_on_stop = stream.get_final_message()
+                                if final_message_obj_on_stop and final_message_obj_on_stop.usage:
+                                    if current_input_tokens is None and hasattr(final_message_obj_on_stop.usage, 'input_tokens'):
+                                        current_input_tokens = final_message_obj_on_stop.usage.input_tokens
+                                        logger.info(f"Anthropic stream: input_tokens from get_final_message (on stop): {current_input_tokens}")
+                                    if hasattr(final_message_obj_on_stop.usage, 'output_tokens'):
+                                        current_output_tokens = final_message_obj_on_stop.usage.output_tokens
+                                        logger.info(f"Anthropic stream: output_tokens from get_final_message (on stop): {current_output_tokens}")
+                                elif current_input_tokens is None or current_output_tokens is None:
+                                     logger.warning(f"Anthropic stream for {config_id}: Could not definitively get all token counts from message_stop/get_final_message. Input: {current_input_tokens}, Output: {current_output_tokens}")
 
                             elif event.type == "error":
                                 logger.error(f"Anthropic stream error for {config_id}: {event.error}")
-                                # Construct an error structure similar to non-streaming for consistency
+                                
                                 error_details = {"type": event.error.get("type", "stream_error"), "message": event.error.get("message", "Unknown stream error")}
                                 return {
                                     "error_message": f"Anthropic Stream Error: {event.error.get('type', 'unknown')}",
                                     "response_time": time.time() - start_time,
                                     "details": error_details,
-                                    "raw_response_text": accumulated_text # return what was accumulated so far
+                                    "raw_response_text": accumulated_text,
+                                    "input_tokens": current_input_tokens,
+                                    "output_tokens": current_output_tokens
                                 }
                     
                     response_text_for_error = accumulated_text.strip()
-                    # Ensure token counts are set if stream ended without a final message_delta or explicit stop usage
-                    if not output_tokens and final_usage: # If final_usage was captured but not output_tokens specifically
-                        output_tokens = final_usage.output_tokens
-                    if not input_tokens and final_usage:
-                        input_tokens = final_usage.input_tokens
                     
-                    logger.info(f"Anthropic stream completed for {config_id}. Final Input: {input_tokens}, Final Output: {output_tokens}. Response length: {len(response_text_for_error)}")
+                    if current_input_tokens is None or current_output_tokens is None:
+                        logger.warning(f"Anthropic stream for {config_id}: One or both token counts still None after stream. Input: {current_input_tokens}, Output: {current_output_tokens}. Consider if stream completed fully.")
 
+                    logger.info(f"Anthropic stream completed for {config_id}. Final Input: {current_input_tokens}, Final Output: {current_output_tokens}. Response length: {len(response_text_for_error)}")
 
                 except anthropic.APIStatusError as e:
                     elapsed_time = time.time() - start_time
@@ -561,29 +589,31 @@ def get_llm_response(prompt: str, model_config: dict, is_json_response_expected:
             }
     else:
         cleaned_answer = "X"
-        if response_text_for_error:            
-            final_answer_match = re.search(r"Final Answer:\s*([A-D])", response_text_for_error, re.IGNORECASE | re.MULTILINE)
+        if response_text_for_error:
+            search_text = response_text_for_error[-100:]
+            logger.info(f"Extracting answer SOLELY from the last 100 characters of response for {config_id}. Snippet: '{search_text}'")
+
+            final_answer_match = re.search(r"Final Answer:\s*([A-D])", search_text, re.IGNORECASE | re.MULTILINE)
             if final_answer_match:
                 cleaned_answer = final_answer_match.group(1).upper()
-                logger.info(f"Extracted final answer '{cleaned_answer}' for {config_id} from explicit pattern 'Final Answer: [A-D]'.")
+                logger.info(f"Extracted final answer '{cleaned_answer}' for {config_id} from explicit 'Final Answer: [A-D]' in trailing 100 chars.")
             else:
                 escaped_punctuation = re.escape(string.punctuation)
                 match = re.search(
                     rf"(?:^|\s|[{escaped_punctuation}])([A-D])(?:$|\s|[{escaped_punctuation}])",
-                    response_text_for_error,
-                    re.MULTILINE 
+                    search_text,
+                    re.MULTILINE
                 )
                 if match:
                     cleaned_answer = match.group(1).upper()
-                    logger.info(f"Extracted single letter answer '{cleaned_answer}' for {config_id} from delimited pattern.")
+                    logger.info(f"Extracted single letter answer '{cleaned_answer}' for {config_id} from delimited pattern in trailing 100 chars.")
                 else:
-                    fallback_match = re.search(r"([A-D])", response_text_for_error)
+                    fallback_match = re.search(r"([A-D])", search_text)
                     if fallback_match:
                         cleaned_answer = fallback_match.group(1).upper()
-                        logger.warning(f"Used fallback regex to extract single letter answer '{cleaned_answer}' for {config_id} from any occurrence.")
+                        logger.warning(f"Used fallback regex to extract single letter answer '{cleaned_answer}' for {config_id} from any occurrence in trailing 100 chars.")
                     else:
-                        logger.error(f"Could not extract single letter answer for {config_id} from '{response_text_for_error[:100]}...'. Marking as X.")
-            
+                        logger.error(f"Could not extract single letter answer for {config_id} from trailing 100 chars: '{search_text}'. Marking as X.")
         else:
             logger.error(f"Empty or no usable response text received for {config_id}. Marking as X.")
         
@@ -596,8 +626,8 @@ def get_llm_response(prompt: str, model_config: dict, is_json_response_expected:
         "response_content": parsed_content_for_return, 
         "raw_response_text": response_text_for_error,
         "response_time": elapsed_time,
-        "input_tokens": input_tokens,
-        "output_tokens": output_tokens
+        "input_tokens": current_input_tokens if model_type == "anthropic" else input_tokens,
+        "output_tokens": current_output_tokens if model_type == "anthropic" else output_tokens
     }
     if 'error_message' in (parsed_content_for_return or {}):
         final_result['error_message'] = parsed_content_for_return['error_message']

@@ -149,7 +149,8 @@ SELF_DISCOVER_CONFIGS = [
         "temperature": 0.1,
         "top_p": 0.95,
         "top_k": 64,
-        "max_tokens": 65536
+        "max_tokens": 65536,
+        "thinking_budget": 24576
     }
     },
     {
@@ -161,7 +162,7 @@ SELF_DISCOVER_CONFIGS = [
         "top_p": 0.95,
         "top_k": 64,
         "max_tokens": 65536,
-        "thinking_budget": 4096 #24576
+        "thinking_budget": 24576
     }
     },
         {

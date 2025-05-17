@@ -44,7 +44,6 @@ ALL_MODEL_CONFIGS = [
         "parameters": {
             "temperature": 0.1,
             "top_p": 0.9,
-            # "max_tokens": 10
         }
     },
     {
@@ -83,7 +82,6 @@ ALL_MODEL_CONFIGS = [
         "model_id": "o3-mini-2025-01-31",
         "parameters": {
             "temperature": 1.0,
-            # "max_tokens": 10
         }
     },
     {
@@ -92,7 +90,6 @@ ALL_MODEL_CONFIGS = [
         "model_id": "o4-mini-2025-04-16",
         "parameters": {
             "temperature": 1.0,
-            # "max_tokens": 10
         }
     },
     {
@@ -161,7 +158,7 @@ ALL_MODEL_CONFIGS = [
     "parameters": {
         "top_p": 0.95,
         "top_k": 64,
-        # "max_output_tokens": 100
+        "thinking_budget": 24576,
     }
     },
     {
@@ -171,7 +168,7 @@ ALL_MODEL_CONFIGS = [
     "parameters": {
         "top_p": 0.95,
         "top_k": 64,
-        # "max_output_tokens": 10
+        "thinking_budget": 24576,
     }
     },
     {

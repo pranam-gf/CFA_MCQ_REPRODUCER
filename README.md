@@ -185,7 +185,7 @@ The program now includes several UI enhancements:
 
 -   **Supported LLM Providers and Models:** This project is designed to work with a variety of LLM providers. Support is integrated for:
     - OpenAI (e.g., GPT-4o, GPT-4.1 series)
-    - Google Gemini (e.g., Gemini 2.5 Pro, Gemini 2.5 Flash with `thinking_budget`)
+    - Google Gemini (e.g., Gemini 2.5 Pro, Gemini 2.5 Flash with `thinking_budget`). Requires `google-genai>=1.10.0` (version `1.15.0` confirmed working) for `ThinkingConfig` support.
     - Anthropic (e.g., Claude 3.7 Sonnet, Claude 3.5 Sonnet & Haiku)
     - Groq (e.g., Llama 4 Maverick/Scout, Llama 3.3 70B, Llama 3.1 8B, with `reasoning_effort` for Grok models)
     - Writer.com (e.g., Palmyra-fin)
@@ -200,12 +200,12 @@ The program now includes several UI enhancements:
           "type": "gemini",
           "model_id": "gemini-2.5-flash-preview-04-17",
           "parameters": {
+              "temperature": 0.7,
               "top_p": 0.95,
               "top_k": 64,
-              "max_output_tokens": 10,
-              "thinking_budget": 0 
+              "thinking_budget": 24576
           }
-      }
+      },
       ```
     - Note that some models support unique parameters that significantly affect their behavior and cost, such as `thinking_budget` for certain Gemini models (e.g., Gemini 2.5 Flash) or `reasoning_effort` for Groq models (e.g., `grok-3-mini-beta`). Ensure these are configured appropriately in the `parameters` section of the model's configuration.
     - Groq models (`grok-3-mini-beta` and `grok-3-mini-fast-beta`) now have configurations for `high` and `low` `reasoning_effort` respectively.
