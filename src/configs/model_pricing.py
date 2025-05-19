@@ -13,7 +13,15 @@ OPENAI_PRICING = {
         "prompt_tokens_cost_per_million": 2.50,
         "completion_tokens_cost_per_million": 10.00,
     },
+    "o3": {
+        "prompt_tokens_cost_per_million": 1.10,
+        "completion_tokens_cost_per_million": 4.40,
+    },
     "o3-mini-2025-01-31": {
+        "prompt_tokens_cost_per_million": 1.10,
+        "completion_tokens_cost_per_million": 4.40,
+    },
+    "o4-mini": {
         "prompt_tokens_cost_per_million": 1.10,
         "completion_tokens_cost_per_million": 4.40,
     },

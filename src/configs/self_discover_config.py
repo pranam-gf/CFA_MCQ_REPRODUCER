@@ -68,20 +68,20 @@ SELF_DISCOVER_CONFIGS = [
     },
     
     {
-        "config_id": "gpt-o3-self-discover",
+        "config_id": "o3-mini-self-discover",
         "type": "openai",
-        "model_id": "o3",
+        "model_id": "o3-mini-2025-01-31",
         "parameters": {
             "temperature": 0.1,
             "response_format": {"type": "json_object"}
         }
     },
     {
-        "config_id": "gpt-o4-mini-self-discover",
+        "config_id": "o4-mini-self-discover",
         "type": "openai",
-        "model_id": "o4-mini",
+        "model_id": "o4-mini-2025-04-16",
         "parameters": {
-            "temperature": 0.1,
+            "temperature": 1.0,
             "response_format": {"type": "json_object"}
         }
     },
@@ -114,7 +114,7 @@ SELF_DISCOVER_CONFIGS = [
     },
     
     {
-        "config_id": "grok-3-mini-beta-self-discover-high-effort",
+        "config_id": "grok-3-mini-beta-high-effort-self-discover",
         "type": "xai",
         "model_id": "grok-3-mini-beta",
         "parameters": {
@@ -123,7 +123,7 @@ SELF_DISCOVER_CONFIGS = [
         }
     },
     {
-        "config_id": "grok-3-mini-beta-self-discover-low-effort",
+        "config_id": "grok-3-mini-beta-low-effort-self-discover",
         "type": "xai",
         "model_id": "grok-3-mini-beta",
         "parameters": {
@@ -165,8 +165,8 @@ SELF_DISCOVER_CONFIGS = [
         "thinking_budget": 24576
     }
     },
-        {
-        "config_id": "palmyra-fin-self-discover",
+    {
+        "config_id": "palmyra-fin-default",
         "type": "writer",
         "model_id": "palmyra-fin",
         "parameters": {

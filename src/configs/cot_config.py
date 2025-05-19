@@ -76,14 +76,14 @@ ALL_MODEL_CONFIGS_COT = [
         }
     },
     {
-        "config_id": "codestral-latest-cot",
+        "config_id": "codestral-latest-official",
         "type": "mistral_official",
         "model_id": "codestral-latest",
         "prompt_strategy_type": "COHERENT_CFA_COT",
         "parameters": {
             "temperature": 0.5,
             "top_p": 0.9,
-            "max_tokens": 32768 
+            "max_tokens": 32768
         }
     },
     {
@@ -97,9 +97,9 @@ ALL_MODEL_CONFIGS_COT = [
         }
     },
     {
-        "config_id": "gpt-o3-cot",
+        "config_id": "o3-mini",
         "type": "openai",
-        "model_id": "o3", 
+        "model_id": "o3-mini-2025-01-31",
         "prompt_strategy_type": "COHERENT_CFA_COT",
         "parameters": {
             "temperature": 0.5,
@@ -107,9 +107,9 @@ ALL_MODEL_CONFIGS_COT = [
         }
     },
     {
-        "config_id": "gpt-o4-mini-cot",
+        "config_id": "o4-mini",
         "type": "openai",
-        "model_id": "o4-mini", 
+        "model_id": "o4-mini-2025-04-16", 
         "prompt_strategy_type": "COHERENT_CFA_COT",
         "parameters": {
             "temperature": 0.5,
@@ -149,7 +149,7 @@ ALL_MODEL_CONFIGS_COT = [
         }
     },
     {
-        "config_id": "grok-3-mini-beta-cot-high-effort",
+        "config_id": "grok-3-mini-beta-high-effort",
         "type": "xai",
         "model_id": "grok-3-mini-beta",
         "prompt_strategy_type": "COHERENT_CFA_COT",
@@ -159,7 +159,7 @@ ALL_MODEL_CONFIGS_COT = [
         }
     },
     {
-        "config_id": "grok-3-mini-beta-cot-low-effort",
+        "config_id": "grok-3-mini-beta-low-effort",
         "type": "xai",
         "model_id": "grok-3-mini-beta",
         "prompt_strategy_type": "COHERENT_CFA_COT",
@@ -181,7 +181,7 @@ ALL_MODEL_CONFIGS_COT = [
 
     
     {
-        "config_id": "palmyra-fin-cot",
+        "config_id": "palmyra-fin-default",
         "type": "writer",
         "model_id": "palmyra-fin",
         "prompt_strategy_type": "COHERENT_CFA_COT",
