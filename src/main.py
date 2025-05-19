@@ -97,19 +97,20 @@ def _run_model_evaluations(
             logger.warning(f"No models found in the configuration set for strategy '{chosen_strategy['name']}'.")
     else:
         filtered_configs = []
-        is_cot_strategy = "cot" in strategy_key.lower()
-        is_self_discover_strategy = strategy_key == "self_discover"
-        for m in relevant_model_configs_source:
-            config_id = m.get('config_id', m.get('model_id'))
-            base_model_id = config_id 
+        for m_strategy_config in relevant_model_configs_source:
+            config_id_from_strategy = m_strategy_config.get('config_id', m_strategy_config.get('model_id'))
 
-            if is_cot_strategy and config_id.endswith('-cot'):
-                 base_model_id = config_id[:-len('-cot')]
-            elif is_self_discover_strategy and config_id.endswith('-self-discover'):
-                 base_model_id = config_id[:-len('-self-discover')]
+            base_id_for_comparison = config_id_from_strategy
+            is_cot_strategy_check = "cot" in strategy_key.lower()
+            is_self_discover_strategy_check = strategy_key == "self_discover"
 
-            if base_model_id in selected_model_ids:
-                 filtered_configs.append(m)
+            if is_cot_strategy_check and config_id_from_strategy.endswith('-cot'):
+                 base_id_for_comparison = config_id_from_strategy[:-len('-cot')]
+            elif is_self_discover_strategy_check and config_id_from_strategy.endswith('-self-discover'):
+                 base_id_for_comparison = config_id_from_strategy[:-len('-self-discover')]
+            if base_id_for_comparison and base_id_for_comparison in selected_model_ids:
+                 filtered_configs.append(m_strategy_config)
+        
         active_model_configs = filtered_configs
 
         if not active_model_configs:
@@ -463,8 +464,7 @@ def main():
     if all_model_runs_summary:
         logger.info("\nGenerating final summary and charts...")
         print("\nGenerating final summary and charts...")
-        plotting.generate_all_charts(all_model_runs_summary, config.CHARTS_DIR) 
-        ui_utils.print_success(f"Charts generated successfully in {config.CHARTS_DIR}")
+        ui_utils.print_info(f"Run `python -m src.utils.generate_plots_only` to generate all charts in {config.RESULTS_DIR / 'CSV_PLOTS'}.")
     else:
        logger.warning("No models were processed in this run.")
        ui_utils.print_warning("No models were processed.")
@@ -521,8 +521,7 @@ def main():
         for row in summary_rows_for_print:
             print(row)
         print(final_separator) 
-        plotting.generate_all_charts(all_model_runs_summary, config.CHARTS_DIR) 
-        ui_utils.print_success(f"Charts generated successfully in {config.CHARTS_DIR}")
+        ui_utils.print_info(f"Run `python -m src.utils.generate_plots_only` to generate all charts in {config.RESULTS_DIR / 'CSV_PLOTS'}.")
     else:
        logger.warning("No models were processed in this run.")
        ui_utils.print_warning("No models were processed.")
