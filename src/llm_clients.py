@@ -100,6 +100,25 @@ def get_llm_response(prompt: str, model_config: dict, is_json_response_expected:
                      pass
                 else:
                     openai_params.pop('response_format', None)
+
+                
+                models_with_strict_defaults = ["o3", "o3-mini", "o4-mini"]
+
+                if model_id in models_with_strict_defaults:
+                    if 'temperature' in openai_params:
+                        removed_temp = openai_params.pop('temperature')
+                        logger.info(f"OpenAI model {config_id} (model_id: {model_id}): Removing 'temperature' ({removed_temp}) to use model's default.")
+                    
+                    if 'max_tokens' in openai_params:
+                        removed_val = openai_params.pop('max_tokens')
+                        logger.info(f"OpenAI model {config_id} (model_id: {model_id}): Removing 'max_tokens' ({removed_val}) to use model's default limit.")
+                    
+                    if 'max_completion_tokens' in openai_params:
+                        removed_val_comp = openai_params.pop('max_completion_tokens')
+                        logger.info(f"OpenAI model {config_id} (model_id: {model_id}): Removing 'max_completion_tokens' ({removed_val_comp}) to use model's default limit.")
+                else:   
+                    pass
+                
                 try:
                     api_response = openai_client.chat.completions.create(
                         model=model_id,
@@ -142,7 +161,21 @@ def get_llm_response(prompt: str, model_config: dict, is_json_response_expected:
                     response_text_for_error = api_response.choices[0].message.content.strip() if api_response.choices and api_response.choices[0].message else ""
                     if hasattr(api_response, 'usage') and api_response.usage:
                         input_tokens = api_response.usage.prompt_tokens
-                        output_tokens = api_response.usage.completion_tokens
+                        base_completion_tokens = api_response.usage.completion_tokens
+                        reasoning_tokens = 0
+                        if hasattr(api_response.usage, 'completion_tokens_details') and \
+                           api_response.usage.completion_tokens_details and \
+                           hasattr(api_response.usage.completion_tokens_details, 'reasoning_tokens'):
+                            reasoning_tokens = api_response.usage.completion_tokens_details.reasoning_tokens or 0
+                    
+                        output_tokens = base_completion_tokens + reasoning_tokens
+
+                        logger.info(f"XAI ({config_id}): Input tokens: {input_tokens}")
+                        logger.info(f"XAI ({config_id}): Base completion_tokens (final answer): {base_completion_tokens}")
+                        logger.info(f"XAI ({config_id}): Reasoning_tokens (internal): {reasoning_tokens}")
+                        logger.info(f"XAI ({config_id}): Total calculated output_tokens: {output_tokens}")
+                        logger.info(f"XAI ({config_id}): API reported total_tokens (for reference): {api_response.usage.total_tokens}")
+
                     else: 
                         logger.warning(f"Token usage data not found in xAI response for {config_id}. Setting to None.")
                 except Exception as e:

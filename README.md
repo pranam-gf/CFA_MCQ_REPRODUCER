@@ -40,23 +40,30 @@ This comprehensive LLM benchmark evaluates the performance of state-of-the-art l
 </tr>
 <tr>
 <td align="center"><strong>Visualizations</strong></td>
-<td>Model-Strategy Accuracy Comparison, Average Processing Time, Total Output Tokens, Combined Performance (Accuracy & Time), Accuracy/F1 Comparison (Default vs SC-CoT), Self-Consistency CoT Comparison (N=3 vs N=5), Accuracy/F1 vs Time Trade-off, Accuracy/F1 vs Cost Trade-off, Latency vs Cost Trade-off, Total Run Time Comparison, Default Strategy Metric Comparisons (Accuracy, F1, Latency), Confusion Matrices</td>
-<td align="center"><strong>15+</strong></td>
+<td>Model-Strategy Accuracy Comparison, Average Processing Time, Total Output Tokens, Combined Performance (Accuracy & Time), Accuracy/F1 Comparison (Default vs SC-CoT), Self-Consistency CoT Comparison (N=3 vs N=5), Accuracy/F1 vs Time Trade-off, Accuracy/F1 vs Cost Trade-off, Latency vs Cost Trade-off, Total Run Time Comparison, Default Strategy Metric Comparisons (Accuracy, F1, Latency), Confusion Matrices, **Pareto Frontier (Accuracy vs. Cost, Accuracy vs. Latency)**, **Cost-Latency-Accuracy Bubble Plot**</td>
+<td align="center"><strong>18+</strong></td>
 </tr>
 </tbody>
 </table>
 
-This benchmark analyzes over 21 state-of-the-art LLMs across multiple reasoning strategies, measuring 11 performance metrics, and generating 15+ detailed visualization plots to evaluate and compare their performance on CFA multiple-choice questions.
+This benchmark analyzes over 21 state-of-the-art LLMs across multiple reasoning strategies, measuring 11 performance metrics, and generating 18+ detailed visualization plots to evaluate and compare their performance on CFA multiple-choice questions.
 
 ## Project Structure
 
 ```
 CFA_MCQ_REPRODUCER/
 ├── data/
+│   ├── default/           # Raw JSON outputs (Default Strategy)
+│   ├── cotn3/             # Raw JSON outputs (CoT N=3 Strategy)
+│   ├── cotn5/             # Raw JSON outputs (CoT N=5 Strategy)
+│   ├── sd/                # Raw JSON outputs (Self-Discover Strategy)
 │   └── updated_data.json  # Input MCQ data (questions, correct answers)
 ├── results/
-│   ├── comparison_charts/ # Output charts comparing model performance
-│   ├── json_plot_charts/ # Output charts comparing model performance
+│   ├── comparison_charts/ # Output charts from direct model runs (src/main.py)
+│   ├── CSV_PLOTS/         # Comprehensive output charts from summary CSV (src/utils/generate_plots_only.py)
+│   │   ├── comparative_performance/ # Standard comparison charts
+│   │   ├── trade_off_analysis/    # Pareto, bubble, and other trade-off plots
+│   │   └── model_type_analysis/   # Plots comparing model categories (e.g., Reasoning vs. Non-Reasoning)
 │   └── *.json             # Raw JSON outputs for each model run
 ├── src/
 │   ├── __init__.py
@@ -125,7 +132,8 @@ python -m src.main
 
 This will:
 - Load data from `data/updated_data.json` with a loading animation.
-- **Prompt you to choose a run mode:**
+- **Check for existing JSON results in `results/json/`**: If found, it will ask if you want to skip evaluations and proceed directly to generating plots from these existing results. If yes, it will update the summary CSV and generate all plots, then exit.
+- **Prompt you to choose a run mode (if not skipping to plots):**
   - **Full Evaluation:** Runs all available models with the Default, Self-Consistency CoT (N=3), and Self-Consistency CoT (N=5) strategies automatically.
   - **Custom Run:** Allows you to interactively select specific models and a single strategy to run.
 - Process each question with the selected configurations, showing real-time progress.
@@ -133,7 +141,7 @@ This will:
 - Save detailed results for each model-strategy combination to a JSON file in the `results/` directory.
 - Calculate and display evaluation metrics (e.g., accuracy, F1 score, estimated cost).
 - **Save an aggregated summary of all metrics** to `results/all_runs_summary_metrics.csv`.
-- Generate a comprehensive suite of comparison charts in `results/comparison_charts/`.
+- **Prompt to generate plots (if evaluations were run):** If model evaluations were executed, it will ask if you want to generate plots. If yes, it will run `src.utils.generate_plots_only` to create all charts.
 - Present a formatted summary table of results in the console.
 
 ### Interactive UI Features
@@ -167,19 +175,32 @@ The program now includes several UI enhancements:
 
 ![Formatted results summary table](img/llm_results.png)
 
-6.  **Performance Visualization**: Generates and saves a suite of comparison charts in `results/comparison_charts/` for comprehensive analysis of model and strategy performance. Interactive HTML versions are also saved alongside static PNG images. Key outputs include:
-    *   **Aggregated Metrics Summary (`results/all_runs_summary_metrics.csv`)**: A CSV file containing key metrics for every model-strategy combination executed. Columns include: `run_id`, `model_id_full`, `base_model_id`, `strategy_name`, `strategy_type`, `strategy_param`, `display_name`, `accuracy`, `f1_score`, `avg_time_per_question`, `total_run_time`, `total_output_tokens`, `total_cost`.
-    *   **Model-Strategy Accuracy Comparison (`model_strategy_comparison_accuracy.png`/`.html`)**: Bar chart visualizing the accuracy scores for each model-strategy combination. Higher bars denote better performance.
-    *   **Average Processing Time per Question (`model_strategy_comparison_response_time.png`/`.html`)**: Bar chart showing the average time (in seconds) each model-strategy took per question. Lower bars indicate faster processing.
-    *   **Total Output Tokens Generated (`model_strategy_comparison_output_tokens.png`/`.html`)**: Bar chart illustrating the total output tokens generated by each configuration. Useful for assessing verbosity and potential costs.
-    *   **Combined Performance: Accuracy & Avg. Question Time (`model_strategy_combined_metrics.png`/`.html`)**: Dual-axis chart presenting accuracy (bars) and average processing time (line) together for evaluating speed vs. accuracy trade-offs.
-    *   **Accuracy/F1 Comparison: Default vs. SC-CoT (N=3) (`comparison_<metric>_by_strategy.png`/`.html`)**: Grouped bar chart directly comparing the performance (Accuracy and F1 Score) of the Default strategy against the Self-Consistency CoT (N=3) strategy for each base model.
-    *   **Self-Consistency CoT Comparison: N=3 vs. N=5 (`comparison_sc_<metric>_n3_vs_n5.png`/`.html`)**: Grouped bar chart comparing the performance (Accuracy and F1 Score) between N=3 and N=5 samples for the Self-Consistency CoT strategy across models.
-    *   **Accuracy/F1 vs. Time Trade-off (`tradeoff_<metric>_vs_time.png`/`.html`)**: Scatter plot visualizing the relationship between performance (Accuracy or F1 Score) on the Y-axis and Average Time per Question on the X-axis. Points are colored by model and shaped by strategy type, helping identify efficient configurations.
-    *   **Total Run Time Comparison by Strategy (`comparison_total_time_by_strategy.png`/`.html`)**: Grouped bar chart showing the *total* time taken to process all questions for each model, grouped by strategy. This provides a view of the overall execution duration for each configuration.
-    *   **Default Strategy - Accuracy Comparison (`default_strategy_accuracy_comparison.png`/`.html`)**: Bar chart comparing the accuracy of all tested models when using only the 'default' prompt strategy. Allows for clear model-to-model comparison under the baseline strategy.
-    *   **Default Strategy - F1 Score Comparison (`default_strategy_f1_score_comparison.png`/`.html`)**: Bar chart comparing the F1-score of all tested models when using only the 'default' prompt strategy.
-    *   **Default Strategy - Latency Comparison (`default_strategy_average_latency_ms_comparison.png`/`.html`)**: Bar chart comparing the average processing time (latency in milliseconds) of all tested models when using only the 'default' prompt strategy.
+6.  **Plot Generation & Post-Processing**: The main pipeline (`src/main.py`) offers options to automatically update summaries and generate plots. However, for more granular control or specific updates, you can run the following utility scripts manually:
+
+    *   **a. Update Summary CSV (Optional, usually handled by `src/main.py`)**:
+        *   **Command**: `python -m src.utils.update_summary_from_json`
+        *   **Purpose**: This script reads all raw JSON output files from the `results/json/[strategy_folder]/` directories (e.g., `results/json/default/`, `results/json/cotn3/`, etc.) and creates/updates the master `results/all_runs_summary_metrics.csv` file. 
+        *   **When to Run**: Typically, `src/main.py` handles this if you choose to generate plots or if it runs evaluations. Run this manually if you have added or modified raw JSON files in `results/json/` outside of a standard `src/main.py` execution and need to refresh the summary CSV before generating plots or advanced analysis.
+
+    *   **b. Generate Advanced Analysis Data (Optional)**:
+        *   **Command**: `python -m src.utils.generate_advanced_analysis`
+        *   **Purpose**: This script takes the `results/all_runs_summary_metrics.csv` as input and calculates additional derived metrics, such as efficiency scores (e.g., Accuracy per Dollar, Tokens per Second) and aggregated statistics by model type or strategy. The outputs are saved as new CSV files in the `results/advanced_analysis/` directory.
+        *   **When to Run**: Run this script after you have an up-to-date `all_runs_summary_metrics.csv` and before you run `generate_plots_only.py` if you want to include plots based on these derived/advanced metrics.
+
+    *   **c. Generate All Plots**:
+        *   **Command**: `python -m src.utils.generate_plots_only`
+        *   **Purpose**: This is the primary script for generating all visual outputs for the project.
+        *   **When to Run**: Execute this after `all_runs_summary_metrics.csv` is current, and (if desired) after `generate_advanced_analysis.py` has been run. `src/main.py` can also trigger this script if you opt to generate plots at the end of an evaluation run or when using existing JSONs.
+        *   **Reads From**:
+            *   `results/all_runs_summary_metrics.csv` (for most comparative and trade-off plots).
+            *   Raw JSON files in `results/json/[strategy_folder]/` (specifically for generating confusion matrices).
+            *   CSVs in `results/advanced_analysis/` (for plots visualizing derived and aggregated metrics).
+        *   **Output**: All charts are saved in organized subdirectories within `results/CSV_PLOTS/` (e.g., `comparative_performance/`, `trade_off_analysis/`, `model_type_analysis/`, `derived_metrics_analysis/`, `confusion_matrices/`). Interactive HTML versions are saved alongside static PNG images.
+
+    Key outputs from the plotting script include:
+    *   **Aggregated Metrics Summary (`results/all_runs_summary_metrics.csv`)**: A CSV file containing key metrics for every model-strategy combination executed.
+    *   **Confusion Matrices (`results/CSV_PLOTS/confusion_matrices/`)**: Generated from raw JSON outputs in `results/json/`.
+    *   **Various Performance Charts (in `results/CSV_PLOTS/` subdirectories)**: Bar charts, scatter plots, Pareto frontiers, bubble plots, etc., visualizing accuracy, latency, cost, and efficiency metrics.
 
 ## Configuration
 
@@ -211,3 +232,60 @@ The program now includes several UI enhancements:
     - Groq models (`grok-3-mini-beta` and `grok-3-mini-fast-beta`) now have configurations for `high` and `low` `reasoning_effort` respectively.
 -   **API Keys & File Paths:** Global settings like API key environment variable names and default data/results paths can be adjusted in `src/config.py` if needed, though using the `.env` file is recommended for keys.
 -   **Prompt Templates:** Modify or add prompt templates in the `src/prompts/` directory (e.g., `default.py`, `cot.py`) to change how questions are presented to the LLMs for different strategies.
+
+## Directory Structure
+
+```
+CFA_MCQ_REPRODUCER/
+├── data/                     # Input data files (e.g., questions, existing results for parsing)
+│   ├── cotn3/
+│   ├── cotn5/
+│   ├── default/
+│   └── sd/
+├── results/
+│   ├── CSV_PLOTS/            # CENTRAL DIRECTORY FOR ALL GENERATED PLOTS, CATEGORIZED
+│   │   ├── comparative_performance/ # General model/strategy comparison plots
+│   │   ├── confusion_matrices/      # Confusion matrices for each run
+│   │   ├── derived_metrics_analysis/ # Plots from advanced_analysis CSVs (efficiency, etc.)
+│   │   ├── model_type_analysis/     # Plots comparing reasoning vs. non-reasoning models
+│   │   └── trade_off_analysis/      # Pareto frontiers, bubble charts for cost/latency/accuracy
+│   ├── advanced_analysis/    # CSV files with derived metrics and aggregations
+│   ├── outputs/                # Raw outputs from each model run (JSONs, logs) - USED FOR CONFUSION MATRIX PLOTS
+│   └── all_runs_summary_metrics.csv # Aggregated metrics from all runs
+├── src/
+│   ├── __init__.py
+│   ├── config.py          # API keys, file paths, model configs, global settings
+│   ├── llm_clients.py     # Functions for interacting with LLM APIs
+│   ├── evaluations/       # Directory for performance evaluation modules
+│   │   ├── classification.py # Classification metrics (accuracy, F1, etc.)
+│   │   ├── resource_metrics.py # Resource usage (tokens, latency)
+│   │   ├── cost_evaluation.py  # Cost estimation for various LLM providers
+│   │   └── __init__.py
+│   ├── plotting.py        # Chart generation functions
+│   ├── prompts/           # Directory for LLM prompt templates
+│   │   └── default.py     # Default prompt templates
+│   │   └── cot.py         # Chain of Thought prompt templates
+│   ├── utils/             # Utility functions
+│   │   ├── ui_utils.py    # UI utilities (loading animations, colored output)
+│   │   ├── prompt_utils.py # Prompt generation and parsing utilities
+│   │   └── __init__.py    # (Likely, or add if not present)
+│   └── main.py            # Main script to run the pipeline
+├── .env                   # Local environment variables (API keys). Not version controlled.
+├── requirements.txt       # Python package dependencies
+└── README.md              # This file
+```
+
+### 3. Generate All Plots
+
+After running evaluations and, if necessary, updating the summary CSV:
+
+```bash
+python -m src.utils.generate_plots_only
+```
+
+This script will:
+- Read the `results/all_runs_summary_metrics.csv` for most plots.
+- Read individual run JSONs from `results/outputs/` to generate confusion matrices.
+- Save all generated plots into categorized subdirectories under `results/CSV_PLOTS/`.
+
+### (Optional) Update Summary CSV from JSON Outputs

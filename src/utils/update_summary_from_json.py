@@ -24,17 +24,28 @@ ALL_MODEL_CONFIG_LISTS = {
 }
 
 REASONING_MODEL_CONFIG_IDS = [
-    "claude-3.7-sonnet",
     "gemini-2.5-pro",
-    "gemini-2.5-flash",
+    "gemini-2.5-flash", 
     "o3-mini",
     "o4-mini",
-    "deepseek-r1",
-    "mistral-large-official",
-    "grok-3-mini-beta-high-effort",
-    "grok-3-mini-beta-low-effort",
-    
+    "grok-3",
+    "grok-3-mini-beta-high-effort", 
+    "deepseek-r1",   
+    "gemini-2.5-pro-cot",
+    "gemini-2.5-flash-cot",
+    "claude-3.7-sonnet-cot",
+    "grok-3-cot",
+    "deepseek-r1-cot",   
+    "gpt-4o-self-discover",
+    "gpt-o3-self-discover", 
+    "grok-3-self-discover",
+    "gemini-2.5-pro-self-discover",
+    "gemini-2.5-flash-self-discover",
+    "deepseek-r1-self-discover",  
+    "grok-3-mini-beta-self-discover-high-effort" 
 ]
+
+REASONING_MODEL_CONFIG_IDS = sorted(list(set(REASONING_MODEL_CONFIG_IDS)))
 
 def get_model_type(config_id_from_filename: str) -> str:
     """Determines if a model is 'Reasoning' or 'Non-Reasoning'."""
@@ -78,14 +89,29 @@ def parse_filename(filename: Path):
     if match:
         config_id = match.group(1)
         strategy_key = match.group(2)
+        if strategy_key.endswith('.json'):
+            strategy_key = strategy_key[:-5]
         return config_id, strategy_key
     logger.warning(f"Could not parse config_id and strategy from filename: {filename.name}")
     return None, None
 
 def main():
     logger.info("Starting summary CSV update process from JSON results...")
-    results_dir = Path(config.RESULTS_DIR)
-    summary_csv_path = results_dir / "all_runs_summary_metrics.csv"
+    
+    base_json_dir = config.RESULTS_DIR / "json"
+    strategy_dirs_map = {
+        "default": base_json_dir / "default",
+        "cotn3": base_json_dir / "cotn3",
+        "cotn5": base_json_dir / "cotn5",
+        "sd": base_json_dir / "sd"
+    }
+
+    results_output_dir = Path(config.RESULTS_DIR)
+    if not results_output_dir.exists():
+        results_output_dir.mkdir(parents=True, exist_ok=True)
+        logger.info(f"Created results directory: {results_output_dir}")
+        
+    summary_csv_path = results_output_dir / "all_runs_summary_metrics.csv"
 
     csv_columns = [
         'Model', 'Strategy', 'Accuracy', 'Avg Time/Q (s)', 
@@ -111,12 +137,27 @@ def main():
         logger.info("Summary CSV not found. Initializing new DataFrame.")
         summary_df = pd.DataFrame(columns=csv_columns)
 
-    json_files = list(results_dir.glob("response_data_*.json"))
+    json_files = []
+    for strategy_key, strategy_dir_path in strategy_dirs_map.items():
+        if strategy_dir_path.exists() and strategy_dir_path.is_dir():
+            logger.info(f"Scanning directory: {strategy_dir_path} for strategy '{strategy_key}'")
+            files_in_dir = list(strategy_dir_path.glob("response_data_*.json"))
+            json_files.extend(files_in_dir)
+            logger.info(f"Found {len(files_in_dir)} JSON files in {strategy_dir_path}.")
+        else:
+            logger.warning(f"Directory for strategy '{strategy_key}' not found or is not a directory: {strategy_dir_path}")
+            
     if not json_files:
-        logger.info("No response_data JSON files found in results directory.")
+        logger.info("No response_data JSON files found in the specified results/json subdirectories.")
+        if not summary_df.empty or not summary_csv_path.exists():
+            try:
+                summary_df.to_csv(summary_csv_path, index=False)
+                logger.info(f"Summary CSV (possibly empty or with new columns) saved to {summary_csv_path}")
+            except Exception as e:
+                logger.error(f"Error saving summary CSV to {summary_csv_path}: {e}")
         return
 
-    logger.info(f"Found {len(json_files)} JSON files to process.")
+    logger.info(f"Found a total of {len(json_files)} JSON files to process across all specified data directories.")
     
     new_rows = []
 

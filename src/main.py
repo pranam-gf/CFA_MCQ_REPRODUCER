@@ -20,13 +20,15 @@ from .strategies import default as default_strategy
 from .strategies import self_consistency as sc_strategy
 from .strategies import self_discover as sd_strategy
 from .prompts.cot import COHERENT_CFA_COT
+import subprocess
+import sys
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 def setup_logging():
     """Configures root logger and adds a file handler for warnings."""
-    logging.basicConfig(level=logging.INFO, 
-                        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     warning_log_path = config.RESULTS_DIR / "model_warnings.log"
     file_handler_warnings = logging.FileHandler(warning_log_path)
     file_handler_warnings.setLevel(logging.WARNING) 
@@ -74,6 +76,19 @@ def _run_model_evaluations(
     strategy_params = chosen_strategy["params"]
     strategy_name_for_file = strategy_key.replace(" ", "_").lower()
     ui_utils.print_info(f"Preparing for strategy: {chosen_strategy['name']}")
+    
+    strategy_folder_map = {
+        "default": "default",
+        "self_consistency_cot_n3": "cotn3",
+        "self_consistency_cot_n5": "cotn5",
+        "self_discover": "sd"
+    }
+    
+    strategy_folder_name = strategy_folder_map.get(strategy_key, strategy_name_for_file) 
+    
+    
+    json_output_dir = config.RESULTS_DIR / "json" / strategy_folder_name
+    json_output_dir.mkdir(parents=True, exist_ok=True) 
 
     relevant_model_configs_source = []
     if "cot" in strategy_key.lower(): 
@@ -175,9 +190,15 @@ def _run_model_evaluations(
             all_model_runs_summary[base_model_id_for_summary][chosen_strategy['name']] = {
                 "error": "Missing credentials", "num_processed": 0, "total_run_time": 0.0
             }
+            
+            run_identifier_log = f"{config_id_loop}__{strategy_name_for_file}"
+            
+            model_response_filename = json_output_dir / f"response_data_{run_identifier_log}.json"
+            logger.info(f"Credential check failed. Expected output for {run_identifier_log} would be at {model_response_filename}")
             continue
 
-        model_response_filename = config.RESULTS_DIR / f"response_data_{run_identifier_log}.json"
+        run_identifier_log = f"{config_id_loop}__{strategy_name_for_file}" 
+        model_response_filename = json_output_dir / f"response_data_{run_identifier_log}.json"
         llm_run_results_data_from_cache = None
         is_from_cache = False
 
@@ -299,6 +320,18 @@ def _run_model_evaluations(
                 "config_id_used": config_id_loop
             }
 
+def _check_existing_json_results(base_json_dir: Path) -> bool:
+    """Checks if any response_data_*.json files exist in strategy subfolders."""
+    strategy_subfolders = ["default", "cotn3", "cotn5", "sd"]
+    for folder_name in strategy_subfolders:
+        strategy_dir = base_json_dir / folder_name
+        if strategy_dir.exists() and strategy_dir.is_dir():
+            if any(strategy_dir.glob("response_data_*.json")):
+                logger.info(f"Found existing JSON results in {strategy_dir}")
+                return True
+    logger.info(f"No existing JSON results found in any subfolders of {base_json_dir}")
+    return False
+
 def main():
     setup_logging() 
     logger.info("Starting CFA MCQ Reproducer pipeline...")
@@ -306,6 +339,7 @@ def main():
 
     config.RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     config.CHARTS_DIR.mkdir(parents=True, exist_ok=True)
+    (config.RESULTS_DIR / "json").mkdir(parents=True, exist_ok=True) 
     processed_data = None
     if config.FILLED_JSON_PATH.exists():
         logger.info(f"Loading processed data from: {config.FILLED_JSON_PATH}")
@@ -340,6 +374,74 @@ def main():
         ui_utils.print_error(f"Input data file not found: {config.FILLED_JSON_PATH}")
         logger.error(f"Input data file not found: {config.FILLED_JSON_PATH}. Exiting.")
         return
+
+    base_json_results_dir = config.RESULTS_DIR / "json"
+    if _check_existing_json_results(base_json_results_dir):
+        ui_utils.print_info("Existing LLM evaluation results (JSON files) were found.")
+        proceed_with_existing_plots = questionary.confirm(
+            "Would you like to skip new evaluations and generate plots from these existing results?",
+            default=False 
+        ).ask()
+
+        if proceed_with_existing_plots is None: 
+            ui_utils.print_warning("Selection cancelled. Exiting.")
+            return
+
+        if proceed_with_existing_plots:
+            logger.info("User opted to generate plots from existing JSON results.")
+            ui_utils.print_info("Proceeding to generate plots from existing JSON results...")
+            python_executable = sys.executable
+            current_errors = False
+
+            ui_utils.print_info("Ensuring summary CSV is up-to-date with existing JSONs...")
+            try:
+                update_summary_proc = subprocess.run(
+                    [python_executable, "-m", "src.utils.update_summary_from_json"],
+                    capture_output=True, text=True, check=False
+                )
+                if update_summary_proc.returncode == 0:
+                    ui_utils.print_success("Summary CSV updated successfully from existing JSONs.")
+                    logger.info("src.utils.update_summary_from_json completed successfully.")
+                    if update_summary_proc.stdout: logger.info(f"Update summary stdout:\n{update_summary_proc.stdout}")
+                    if update_summary_proc.stderr: logger.warning(f"Update summary stderr (on success):\n{update_summary_proc.stderr}")
+                else:
+                    ui_utils.print_error("Failed to update summary CSV from existing JSONs.")
+                    logger.error(f"src.utils.update_summary_from_json failed. RC: {update_summary_proc.returncode}. Stderr:\n{update_summary_proc.stderr}")
+                    if update_summary_proc.stdout: logger.error(f"Update summary stdout (on error):\n{update_summary_proc.stdout}")
+                    current_errors = True
+            except Exception as e_update:
+                ui_utils.print_error(f"Error running update_summary_from_json.py: {e_update}")
+                logger.error(f"Error running update_summary_from_json.py: {e_update}", exc_info=True)
+                current_errors = True
+            
+            if current_errors:
+                 ui_utils.print_warning("There were issues updating the summary CSV. Plot generation might use stale or incomplete data.")
+
+            ui_utils.print_info("Generating plots from summary data...")
+            try:
+                generate_plots_proc = subprocess.run(
+                    [python_executable, "-m", "src.utils.generate_plots_only"],
+                    capture_output=True, text=True, check=False
+                )
+                if generate_plots_proc.returncode == 0:
+                    ui_utils.print_success("Plot generation script completed successfully.")
+                    logger.info("src.utils.generate_plots_only completed successfully.")
+                    if generate_plots_proc.stdout: logger.info(f"Generate plots stdout:\n{generate_plots_proc.stdout}")
+                    if generate_plots_proc.stderr: logger.warning(f"Generate plots stderr (on success):\n{generate_plots_proc.stderr}")
+                else:
+                    ui_utils.print_error("Plot generation script encountered an error.")
+                    logger.error(f"src.utils.generate_plots_only failed. RC: {generate_plots_proc.returncode}. Stderr:\n{generate_plots_proc.stderr}")
+                    if generate_plots_proc.stdout: logger.error(f"Generate plots stdout (on error):\n{generate_plots_proc.stdout}")
+            except Exception as e_plots:
+                ui_utils.print_error(f"Error running generate_plots_only.py: {e_plots}")
+                logger.error(f"Error running generate_plots_only.py: {e_plots}", exc_info=True)
+
+            ui_utils.print_info(f"Plot generation from existing results finished. Plots (if any) are in {config.RESULTS_DIR / 'CSV_PLOTS'}.")
+            return
+        else:
+            logger.info("User opted to proceed with standard evaluation pipeline.")
+            ui_utils.print_info("Proceeding with the standard evaluation pipeline.")
+           
 
     all_model_runs_summary = {}
     logger.info("Determining evaluation run type...")
@@ -464,7 +566,55 @@ def main():
     if all_model_runs_summary:
         logger.info("\nGenerating final summary and charts...")
         print("\nGenerating final summary and charts...")
-        ui_utils.print_info(f"Run `python -m src.utils.generate_plots_only` to generate all charts in {config.RESULTS_DIR / 'CSV_PLOTS'}.")
+        
+        
+        generate_plots_confirm = questionary.confirm(
+            "Do you want to generate plots now? (This may take a few minutes)",
+            default=True
+        ).ask()
+
+        if generate_plots_confirm is None:
+            ui_utils.print_warning("Plot generation preference not selected. Skipping plot generation.")
+            logger.info("User did not select a preference for plot generation. Skipping.")
+        elif generate_plots_confirm:
+            ui_utils.print_info(f"Proceeding with plot generation. Output will be in {config.RESULTS_DIR / 'CSV_PLOTS'}.")
+            logger.info("User opted to generate plots. Attempting to run src.utils.generate_plots_only...")
+            try:
+                
+                python_executable = sys.executable
+                
+                process_result = subprocess.run(
+                    [python_executable, "-m", "src.utils.generate_plots_only"],
+                    capture_output=True,
+                    text=True,
+                    check=False  
+                )
+                if process_result.returncode == 0:
+                    ui_utils.print_success("Plot generation script completed successfully.")
+                    logger.info("Plot generation script (src.utils.generate_plots_only) completed successfully.")
+                    if process_result.stdout:
+                        logger.info(f"Plotting script stdout:\n{process_result.stdout}")
+                    if process_result.stderr: 
+                        logger.warning(f"Plotting script stderr (on success):\n{process_result.stderr}")
+                else:
+                    ui_utils.print_error("Plot generation script encountered an error.")
+                    logger.error(f"Plot generation script (src.utils.generate_plots_only) failed with return code {process_result.returncode}.")
+                    if process_result.stdout:
+                        logger.error(f"Plotting script stdout (on error):\n{process_result.stdout}")
+                    if process_result.stderr:
+                        logger.error(f"Plotting script stderr (on error):\n{process_result.stderr}")
+                ui_utils.print_info(f"Plots (if generated) are in {config.RESULTS_DIR / 'CSV_PLOTS'}")
+
+            except FileNotFoundError:
+                ui_utils.print_error(f"Error: Could not find the Python executable '{sys.executable}' to run the plotting script.")
+                logger.error(f"FileNotFoundError: Python executable '{sys.executable}' not found when trying to run plotting script.", exc_info=True)
+            except Exception as e:
+                ui_utils.print_error(f"An unexpected error occurred while trying to run the plotting script: {e}")
+                logger.error(f"Unexpected error running plotting script: {e}", exc_info=True)
+        else:
+            ui_utils.print_info("Skipping plot generation as per user request.")
+            logger.info("User opted not to generate plots at this time.")
+            
     else:
        logger.warning("No models were processed in this run.")
        ui_utils.print_warning("No models were processed.")
@@ -521,7 +671,6 @@ def main():
         for row in summary_rows_for_print:
             print(row)
         print(final_separator) 
-        ui_utils.print_info(f"Run `python -m src.utils.generate_plots_only` to generate all charts in {config.RESULTS_DIR / 'CSV_PLOTS'}.")
     else:
        logger.warning("No models were processed in this run.")
        ui_utils.print_warning("No models were processed.")
