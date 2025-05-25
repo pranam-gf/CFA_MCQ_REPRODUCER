@@ -17,6 +17,28 @@ SELF_DISCOVER_CONFIGS = [
     }
     },
     {
+        "config_id": "claude-opus-4-self-discover",
+        "type": "anthropic",
+        "model_id": "claude-opus-4-20250514",
+        "parameters": {
+            "temperature": 0.1,
+            "top_p": 0.999,
+            "top_k": 250,
+            "max_tokens": 32000
+        }
+    },
+    {
+        "config_id": "claude-sonnet-4-self-discover",
+        "type": "anthropic",
+        "model_id": "claude-sonnet-4-20250514",
+        "parameters": {
+            "temperature": 0.1,
+            "top_p": 0.999,
+            "top_k": 250,
+            "max_tokens": 64000
+        }
+    },
+    {
         "config_id": "claude-3.5-sonnet-self-discover",
         "type": "anthropic",
         "model_id": "claude-3-5-sonnet-20241022",

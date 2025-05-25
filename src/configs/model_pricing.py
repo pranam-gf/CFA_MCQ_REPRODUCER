@@ -48,6 +48,10 @@ ANTHROPIC_PRICING = {
         "prompt_tokens_cost_per_million": 3.00,
         "completion_tokens_cost_per_million": 15.00,
     },
+    "claude-sonnet-4-20250514": {
+        "prompt_tokens_cost_per_million": 3.00,
+        "completion_tokens_cost_per_million": 15.00,
+    },
     "claude-3-5-sonnet-20241022": {
         "prompt_tokens_cost_per_million": 3.00,
         "completion_tokens_cost_per_million": 15.00,
@@ -57,6 +61,10 @@ ANTHROPIC_PRICING = {
         "completion_tokens_cost_per_million": 4.00,
     },
     "claude-3-opus-20240229": {
+        "prompt_tokens_cost_per_million": 15.00,
+        "completion_tokens_cost_per_million": 75.00,
+    },
+    "claude-opus-4-20250514": {
         "prompt_tokens_cost_per_million": 15.00,
         "completion_tokens_cost_per_million": 75.00,
     },

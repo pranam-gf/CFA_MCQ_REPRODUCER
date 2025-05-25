@@ -25,8 +25,8 @@ This comprehensive LLM benchmark evaluates the performance of state-of-the-art l
 <tbody>
 <tr>
 <td align="center"><strong>Models</strong></td>
-<td>Claude-3.7-Sonnet, Claude-3.5-Sonnet, Claude-3.5-Haiku, Mistral-Large, Codestral, Palmyra-fin, GPT-4o, O3-mini, O4-mini, GPT-4.1, GPT-4.1-mini, GPT-4.1-nano, Grok-3, Grok-3-mini-beta (high/low effort), Gemini-2.5-Pro, Gemini-2.5-Flash, Deepseek-R1, Llama-4-Maverick, Llama-4-Scout, Llama-3.3-70B, Llama-3.1-8B-instant</td>
-<td align="center"><strong>21+</strong></td>
+<td>Claude-3.7-Sonnet, Claude-3.5-Sonnet, Claude-3.5-Haiku, Claude-Opus-4, Claude-Sonnet-4, Mistral-Large, Palmyra-fin, GPT-4o, O3-mini, O4-mini, GPT-4.1, GPT-4.1-mini, GPT-4.1-nano, Grok-3, Grok-3-mini-beta (high/low effort), Gemini-2.5-Pro, Gemini-2.5-Flash, Deepseek-R1, Llama-4-Maverick, Llama-4-Scout, Llama-3.3-70B, Llama-3.1-8B-instant</td>
+<td align="center"><strong>23+</strong></td>
 </tr>
 <tr>
 <td align="center"><strong>Strategies</strong></td>
@@ -46,7 +46,7 @@ This comprehensive LLM benchmark evaluates the performance of state-of-the-art l
 </tbody>
 </table>
 
-This benchmark analyzes over 21 state-of-the-art LLMs across multiple reasoning strategies, measuring 11 performance metrics, and generating 18+ detailed visualization plots to evaluate and compare their performance on CFA multiple-choice questions.
+This benchmark analyzes over 23 state-of-the-art LLMs across multiple reasoning strategies, measuring 11 performance metrics, and generating 18+ detailed visualization plots to evaluate and compare their performance on CFA multiple-choice questions.
 
 ## Project Structure
 
@@ -59,11 +59,15 @@ CFA_MCQ_REPRODUCER/
 │   ├── sd/                # Raw JSON outputs (Self-Discover Strategy)
 │   └── updated_data.json  # Input MCQ data (questions, correct answers)
 ├── results/
+│   ├── analysis_charts/   # Output charts from the analysis script (src/evaluations/analyze_summary_metrics.py)
+│   ├── IJCAI_RESULTS/     # CSV files of analysis tables (src/evaluations/analyze_summary_metrics.py)
 │   ├── comparison_charts/ # Output charts from direct model runs (src/main.py)
 │   ├── CSV_PLOTS/         # Comprehensive output charts from summary CSV (src/utils/generate_plots_only.py)
 │   │   ├── comparative_performance/ # Standard comparison charts
-│   │   ├── trade_off_analysis/    # Pareto, bubble, and other trade-off plots
-│   │   └── model_type_analysis/   # Plots comparing model categories (e.g., Reasoning vs. Non-Reasoning)
+│   │   ├── confusion_matrices/      # Confusion matrices for each run
+│   │   ├── derived_metrics_analysis/ # Plots from advanced_analysis CSVs (efficiency, etc.)
+│   │   ├── model_type_analysis/     # Plots comparing model categories (e.g., Reasoning vs. Non-Reasoning)
+│   │   └── trade_off_analysis/      # Pareto, bubble, and other trade-off plots
 │   └── *.json             # Raw JSON outputs for each model run
 ├── src/
 │   ├── __init__.py
@@ -73,6 +77,7 @@ CFA_MCQ_REPRODUCER/
 │   │   ├── classification.py # Classification metrics (accuracy, F1, etc.)
 │   │   ├── resource_metrics.py # Resource usage (tokens, latency)
 │   │   ├── cost_evaluation.py  # Cost estimation for various LLM providers
+│   │   ├── analyze_summary_metrics.py # Script to perform deeper analysis on aggregated results and generate specific charts/tables
 │   │   └── __init__.py
 │   ├── plotting.py        # Chart generation functions
 │   ├── prompts/           # Directory for LLM prompt templates
@@ -197,6 +202,15 @@ The program now includes several UI enhancements:
             *   CSVs in `results/advanced_analysis/` (for plots visualizing derived and aggregated metrics).
         *   **Output**: All charts are saved in organized subdirectories within `results/CSV_PLOTS/` (e.g., `comparative_performance/`, `trade_off_analysis/`, `model_type_analysis/`, `derived_metrics_analysis/`, `confusion_matrices/`). Interactive HTML versions are saved alongside static PNG images.
 
+    *   **d. Perform In-depth Analysis on Summary Metrics**:
+        *   **Command**: `python -m src.evaluations.analyze_summary_metrics`
+        *   **Purpose**: This script loads the `results/all_runs_summary_metrics.csv` file and performs a deeper analysis. It generates specific tables (e.g., top models by accuracy, cost, speed; performance by model type or strategy) and saves these tables as individual CSV files in the `results/IJCAI_RESULTS/` directory. It also generates corresponding plots for these analyses, saved in `results/analysis_charts/`.
+        *   **When to Run**: Run this script after `all_runs_summary_metrics.csv` is up-to-date to get detailed tabular and visual summaries of the overall benchmark performance.
+        *   **Reads From**: `results/all_runs_summary_metrics.csv`.
+        *   **Output**: 
+            *   CSV files containing analysis tables in `results/IJCAI_RESULTS/`.
+            *   Plot images (PNG) in `results/analysis_charts/`.
+
     Key outputs from the plotting script include:
     *   **Aggregated Metrics Summary (`results/all_runs_summary_metrics.csv`)**: A CSV file containing key metrics for every model-strategy combination executed.
     *   **Confusion Matrices (`results/CSV_PLOTS/confusion_matrices/`)**: Generated from raw JSON outputs in `results/json/`.
@@ -243,6 +257,8 @@ CFA_MCQ_REPRODUCER/
 │   ├── default/
 │   └── sd/
 ├── results/
+│   ├── analysis_charts/      # Charts from analyze_summary_metrics.py
+│   ├── IJCAI_RESULTS/        # CSV tables from analyze_summary_metrics.py
 │   ├── CSV_PLOTS/            # CENTRAL DIRECTORY FOR ALL GENERATED PLOTS, CATEGORIZED
 │   │   ├── comparative_performance/ # General model/strategy comparison plots
 │   │   ├── confusion_matrices/      # Confusion matrices for each run
@@ -260,6 +276,7 @@ CFA_MCQ_REPRODUCER/
 │   │   ├── classification.py # Classification metrics (accuracy, F1, etc.)
 │   │   ├── resource_metrics.py # Resource usage (tokens, latency)
 │   │   ├── cost_evaluation.py  # Cost estimation for various LLM providers
+│   │   ├── analyze_summary_metrics.py # Script to perform deeper analysis on aggregated results and generate specific charts/tables
 │   │   └── __init__.py
 │   ├── plotting.py        # Chart generation functions
 │   ├── prompts/           # Directory for LLM prompt templates

@@ -85,12 +85,10 @@ def get_base_model_id(config_id_used: str) -> str:
 
 def parse_filename(filename: Path):
     """Parses config_id and strategy_key from the JSON filename."""
-    match = re.match(r"response_data_(.*?)__(.*?).json", filename.name)
+    match = re.fullmatch(r"response_data_(.*?)__(.*?)\.json", filename.name)
     if match:
         config_id = match.group(1)
         strategy_key = match.group(2)
-        if strategy_key.endswith('.json'):
-            strategy_key = strategy_key[:-5]
         return config_id, strategy_key
     logger.warning(f"Could not parse config_id and strategy from filename: {filename.name}")
     return None, None
@@ -99,12 +97,6 @@ def main():
     logger.info("Starting summary CSV update process from JSON results...")
     
     base_json_dir = config.RESULTS_DIR / "json"
-    strategy_dirs_map = {
-        "default": base_json_dir / "default",
-        "cotn3": base_json_dir / "cotn3",
-        "cotn5": base_json_dir / "cotn5",
-        "sd": base_json_dir / "sd"
-    }
 
     results_output_dir = Path(config.RESULTS_DIR)
     if not results_output_dir.exists():
@@ -138,26 +130,27 @@ def main():
         summary_df = pd.DataFrame(columns=csv_columns)
 
     json_files = []
-    for strategy_key, strategy_dir_path in strategy_dirs_map.items():
-        if strategy_dir_path.exists() and strategy_dir_path.is_dir():
-            logger.info(f"Scanning directory: {strategy_dir_path} for strategy '{strategy_key}'")
-            files_in_dir = list(strategy_dir_path.glob("response_data_*.json"))
-            json_files.extend(files_in_dir)
-            logger.info(f"Found {len(files_in_dir)} JSON files in {strategy_dir_path}.")
-        else:
-            logger.warning(f"Directory for strategy '{strategy_key}' not found or is not a directory: {strategy_dir_path}")
+    if base_json_dir.exists() and base_json_dir.is_dir():
+        logger.info(f"Recursively scanning directory: {base_json_dir} for response_data_*.json files.")
+        json_files = list(base_json_dir.rglob("response_data_*.json"))
+        logger.info(f"Found {len(json_files)} JSON files in {base_json_dir} and its subdirectories.")
+    else:
+        logger.warning(f"Base JSON directory not found or is not a directory: {base_json_dir}")
             
     if not json_files:
-        logger.info("No response_data JSON files found in the specified results/json subdirectories.")
+        logger.info(f"No response_data_*.json files found in {base_json_dir} and its subdirectories.")
         if not summary_df.empty or not summary_csv_path.exists():
             try:
+                for col in csv_columns:
+                    if col not in summary_df.columns:
+                        summary_df[col] = None
                 summary_df.to_csv(summary_csv_path, index=False)
                 logger.info(f"Summary CSV (possibly empty or with new columns) saved to {summary_csv_path}")
             except Exception as e:
                 logger.error(f"Error saving summary CSV to {summary_csv_path}: {e}")
         return
 
-    logger.info(f"Found a total of {len(json_files)} JSON files to process across all specified data directories.")
+    logger.info(f"Found a total of {len(json_files)} JSON files to process.")
     
     new_rows = []
 
@@ -276,6 +269,24 @@ def main():
         final_df = updates_df.reset_index(drop=True)
 
     final_df = final_df.reindex(columns=csv_columns)
+    sort_by_columns = []
+    if 'Strategy' in final_df.columns:
+        sort_by_columns.append('Strategy')
+    if 'Model' in final_df.columns:
+        sort_by_columns.append('Model')
+    if 'Config ID Used' in final_df.columns:
+        sort_by_columns.append('Config ID Used')
+
+    if 'Strategy' in sort_by_columns and 'Model' in sort_by_columns:
+        logger.info(f"Sorting final DataFrame by {sort_by_columns}.")
+        final_df = final_df.sort_values(by=sort_by_columns, ascending=True)
+        final_df = final_df.reset_index(drop=True) # Reset index after sorting
+    else:
+        logger.warning(
+            f"Skipping primary sort as 'Strategy' or 'Model' column is missing. "
+            f"Available columns for sorting: {sort_by_columns}. All columns: {final_df.columns.tolist()}"
+        )
+
     try:
         final_df.to_csv(summary_csv_path, index=False)
         logger.info(f"Summary CSV updated successfully: {summary_csv_path}")

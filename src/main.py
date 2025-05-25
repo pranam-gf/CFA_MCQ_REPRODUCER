@@ -60,6 +60,31 @@ AVAILABLE_STRATEGIES = {
     }
 }
 
+def _run_analysis_script(module_string: str, message: str, proj_root: Path) -> bool:
+    """Helper to run an analysis script as a module."""
+    ui_utils.print_info(message)
+    python_executable = sys.executable
+    try:
+        process_result = subprocess.run(
+            [python_executable, "-m", module_string],
+            capture_output=True, text=True, check=False, cwd=proj_root
+        )
+        if process_result.returncode == 0:
+            ui_utils.print_success(f"Script {module_string} completed successfully.")
+            logger.info(f"{module_string} completed successfully.")
+            if process_result.stdout: logger.info(f"{module_string} stdout:\n{process_result.stdout}")
+            if process_result.stderr: logger.warning(f"{module_string} stderr (on success):\n{process_result.stderr}")
+            return True
+        else:
+            ui_utils.print_error(f"Script {module_string} encountered an error.")
+            logger.error(f"{module_string} failed. RC: {process_result.returncode}. Stderr:\n{process_result.stderr}")
+            if process_result.stdout: logger.error(f"{module_string} stdout (on error):\n{process_result.stdout}")
+            return False
+    except Exception as e:
+        ui_utils.print_error(f"Error running {module_string}: {e}")
+        logger.error(f"Error running {module_string}: {e}", exc_info=True)
+        return False
+
 def _run_model_evaluations(
     processed_data: list, 
     selected_model_ids: list[str] | None, 
@@ -334,6 +359,8 @@ def _check_existing_json_results(base_json_dir: Path) -> bool:
 
 def main():
     setup_logging() 
+    project_root = Path(__file__).resolve().parent.parent
+    logger.info(f"Project root directory: {project_root}")
     logger.info("Starting CFA MCQ Reproducer pipeline...")
     print("Starting CFA MCQ Reproducer pipeline...")
 
@@ -376,308 +403,313 @@ def main():
         return
 
     base_json_results_dir = config.RESULTS_DIR / "json"
+    run_new_evaluations = True
+
     if _check_existing_json_results(base_json_results_dir):
+        print("\n" + "="*30 + " GoodFin CFA MCQ Reproducer - Analysis Options " + "="*30)
         ui_utils.print_info("Existing LLM evaluation results (JSON files) were found.")
-        proceed_with_existing_plots = questionary.confirm(
-            "Would you like to skip new evaluations and generate plots from these existing results?",
-            default=False 
-        ).ask()
-
-        if proceed_with_existing_plots is None: 
-            ui_utils.print_warning("Selection cancelled. Exiting.")
-            return
-
-        if proceed_with_existing_plots:
-            logger.info("User opted to generate plots from existing JSON results.")
-            ui_utils.print_info("Proceeding to generate plots from existing JSON results...")
-            python_executable = sys.executable
-            current_errors = False
-
-            ui_utils.print_info("Ensuring summary CSV is up-to-date with existing JSONs...")
-            try:
-                update_summary_proc = subprocess.run(
-                    [python_executable, "-m", "src.utils.update_summary_from_json"],
-                    capture_output=True, text=True, check=False
-                )
-                if update_summary_proc.returncode == 0:
-                    ui_utils.print_success("Summary CSV updated successfully from existing JSONs.")
-                    logger.info("src.utils.update_summary_from_json completed successfully.")
-                    if update_summary_proc.stdout: logger.info(f"Update summary stdout:\n{update_summary_proc.stdout}")
-                    if update_summary_proc.stderr: logger.warning(f"Update summary stderr (on success):\n{update_summary_proc.stderr}")
-                else:
-                    ui_utils.print_error("Failed to update summary CSV from existing JSONs.")
-                    logger.error(f"src.utils.update_summary_from_json failed. RC: {update_summary_proc.returncode}. Stderr:\n{update_summary_proc.stderr}")
-                    if update_summary_proc.stdout: logger.error(f"Update summary stdout (on error):\n{update_summary_proc.stdout}")
-                    current_errors = True
-            except Exception as e_update:
-                ui_utils.print_error(f"Error running update_summary_from_json.py: {e_update}")
-                logger.error(f"Error running update_summary_from_json.py: {e_update}", exc_info=True)
-                current_errors = True
-            
-            if current_errors:
-                 ui_utils.print_warning("There were issues updating the summary CSV. Plot generation might use stale or incomplete data.")
-
-            ui_utils.print_info("Generating plots from summary data...")
-            try:
-                generate_plots_proc = subprocess.run(
-                    [python_executable, "-m", "src.utils.generate_plots_only"],
-                    capture_output=True, text=True, check=False
-                )
-                if generate_plots_proc.returncode == 0:
-                    ui_utils.print_success("Plot generation script completed successfully.")
-                    logger.info("src.utils.generate_plots_only completed successfully.")
-                    if generate_plots_proc.stdout: logger.info(f"Generate plots stdout:\n{generate_plots_proc.stdout}")
-                    if generate_plots_proc.stderr: logger.warning(f"Generate plots stderr (on success):\n{generate_plots_proc.stderr}")
-                else:
-                    ui_utils.print_error("Plot generation script encountered an error.")
-                    logger.error(f"src.utils.generate_plots_only failed. RC: {generate_plots_proc.returncode}. Stderr:\n{generate_plots_proc.stderr}")
-                    if generate_plots_proc.stdout: logger.error(f"Generate plots stdout (on error):\n{generate_plots_proc.stdout}")
-            except Exception as e_plots:
-                ui_utils.print_error(f"Error running generate_plots_only.py: {e_plots}")
-                logger.error(f"Error running generate_plots_only.py: {e_plots}", exc_info=True)
-
-            ui_utils.print_info(f"Plot generation from existing results finished. Plots (if any) are in {config.RESULTS_DIR / 'CSV_PLOTS'}.")
-            return
-        else:
-            logger.info("User opted to proceed with standard evaluation pipeline.")
-            ui_utils.print_info("Proceeding with the standard evaluation pipeline.")
-           
-
-    all_model_runs_summary = {}
-    logger.info("Determining evaluation run type...")
-
-    
-    use_cache_if_available = questionary.confirm(
-        "Do you want to use existing cached results (if available)? Choosing 'No' will re-run all evaluations.",
-        default=True
-    ).ask()
-
-    if use_cache_if_available is None: 
-        ui_utils.print_warning("Cache preference not selected. Exiting.")
-        return
         
-    if use_cache_if_available:
-        ui_utils.print_info("Attempting to use cached results where available.")
-        logger.info("User opted to use cached results.")
-    else:
-        ui_utils.print_info("Running all evaluations from scratch. Existing cached results will be ignored and overwritten.")
-        logger.info("User opted to run evaluations from scratch.")
-
-    run_mode = questionary.select(
-        "Select run mode:",
-        choices=[
-            {"name": "Run Full Evaluation (All Models, Default + CoT SC N=3/5 + Self-Discover Strategies)", "value": "full"},
-            {"name": "Custom Run (Select Models and Single Strategy)", "value": "custom"},
-        ]
-    ).ask()
-
-    if not run_mode:
-        ui_utils.print_warning("No run mode selected. Exiting.")
-        return
-
-    if run_mode == "full":
-        logger.info("Full evaluation mode selected.")
-        print("\nRunning Full Evaluation...")
-        
-        full_eval_strategies = [
-            "default", 
-            "self_consistency_cot_n3", 
-            "self_consistency_cot_n5",
-            "self_discover"
+        analysis_choices = [
+            {"name": "LLM Benchmark (Comprehensive Summary & All Plots)", "value": "llm_benchmark"},
+            {"name": "Deep Dive Analysis (Advanced Metrics & All Plots)", "value": "deep_dive"},
+            {"name": "Concise Performance Summary (Key Insights & Targeted Plots)", "value": "concise_summary"},
+            {"name": "Generate All Plots Only (from current summary data)", "value": "plots_only"},
+            {"name": "Proceed with New LLM Evaluations", "value": "proceed_new_eval"},
+            {"name": "Exit", "value": "exit"},
         ]
         
-        for strategy_key_full in full_eval_strategies:
-            print(f"\n--- Starting Full Eval: Strategy '{AVAILABLE_STRATEGIES[strategy_key_full]['name']}' ---")
-            
-            _run_model_evaluations(
-                processed_data=processed_data,
-                selected_model_ids=None, 
-                strategy_key=strategy_key_full,
-                all_model_runs_summary=all_model_runs_summary,
-                use_cache=use_cache_if_available
-            )
-            print(f"--- Completed Full Eval: Strategy '{AVAILABLE_STRATEGIES[strategy_key_full]['name']}' ---")
-
-    elif run_mode == "custom":
-        logger.info("Custom run mode selected.")
-        print("\nStarting Custom Run Configuration...")
-        
-        print("\nPreparing available LLM models...")
-        model_loading_anim = ui_utils.LoadingAnimation(message="Loading model configurations") 
-        model_loading_anim.start()
-
-        
-        
-        unique_model_configs_for_listing = configs.DEFAULT_CONFIGS 
-        
-        model_choices = [
-            {
-                "name": f"{m.get('config_id', m.get('model_id'))} ({m.get('type')})", 
-                "value": m.get('config_id', m.get('model_id')) 
-            }
-            for m in unique_model_configs_for_listing 
-        ]
-        model_choices.insert(0, {"name": "[Run All Available Models]", "value": "__ALL__"})
-        model_loading_anim.stop()
-        ui_utils.print_info(f"Found {len(unique_model_configs_for_listing)} unique model configurations for selection.")
-
-        print("\nPlease select which LLM models to run:")
-        selected_model_ids = questionary.checkbox(
-            "Select models (space to select, arrows to move, enter to confirm):",
-            choices=model_choices,
-            validate=lambda a: True if a else "Select at least one model."
-        ).ask()
-        if not selected_model_ids:
-            ui_utils.print_warning("No models selected. Exiting.")
-            return
-        strategy_choices = [
-            {"name": details["name"], "value": key}
-            for key, details in AVAILABLE_STRATEGIES.items()
-        ] 
-
-        print("\nPlease select which prompting strategies to use:")
-        selected_strategy_keys = questionary.checkbox(
-            "Select prompting strategies (space to select, arrows to move, enter to confirm):",
-            choices=strategy_choices,
-            validate=lambda a: True if a else "Select at least one strategy."
+        analysis_choice = questionary.select(
+            "Choose an action:",
+            choices=analysis_choices
         ).ask()
 
-        if not selected_strategy_keys:
-            ui_utils.print_warning("No prompting strategies selected. Exiting.")
+        scripts_to_run = []
+        if analysis_choice == "llm_benchmark":
+            scripts_to_run = [
+                ("src.utils.update_summary_from_json", "Updating summary CSV with existing JSONs..."),
+                ("src.utils.generate_plots_only", "Generating all plots from summary data...")
+            ]
+            run_new_evaluations = False
+        elif analysis_choice == "deep_dive":
+            scripts_to_run = [
+                ("src.utils.update_summary_from_json", "Updating summary CSV with existing JSONs..."),
+                ("src.utils.generate_advanced_analysis", "Generating advanced analysis data..."),
+                ("src.utils.generate_plots_only", "Generating all plots (including advanced)...")
+            ]
+            run_new_evaluations = False
+        elif analysis_choice == "concise_summary":
+            scripts_to_run = [
+                ("src.utils.update_summary_from_json", "Updating summary CSV with existing JSONs..."),
+                ("src.evaluations.analyze_summary_metrics", "Generating concise performance summary & plots...")
+            ]
+            run_new_evaluations = False
+        elif analysis_choice == "plots_only":
+            scripts_to_run = [
+                ("src.utils.generate_plots_only", "Generating all plots from current summary data...")
+            ]
+            run_new_evaluations = False
+        elif analysis_choice == "proceed_new_eval":
+            logger.info("User opted to proceed with new LLM evaluations from the analysis menu.")
+            ui_utils.print_info("Proceeding with new LLM evaluations.")
+            # run_new_evaluations remains True
+        elif analysis_choice == "exit":
+            ui_utils.print_info("Exiting.")
+            return
+        elif analysis_choice is None: # User cancelled the selection
+            ui_utils.print_warning("No analysis option selected. Exiting.")
             return
         
-        if selected_model_ids and selected_strategy_keys:
-             for selected_strategy_key in selected_strategy_keys:
-                 print(f"\n--- Starting Custom Run: Strategy '{AVAILABLE_STRATEGIES[selected_strategy_key]['name']}' ---")
-                 _run_model_evaluations(
-                     processed_data=processed_data,
-                     selected_model_ids=selected_model_ids, 
-                     strategy_key=selected_strategy_key,
-                     all_model_runs_summary=all_model_runs_summary,
-                     use_cache=use_cache_if_available
-                 )
-                 print(f"--- Completed Custom Run: Strategy '{AVAILABLE_STRATEGIES[selected_strategy_key]['name']}' ---")
-        else:
+        if not run_new_evaluations and scripts_to_run:
+            all_scripts_succeeded = True
+            for module_str, msg in scripts_to_run:
+                if not _run_analysis_script(module_str, msg, project_root):
+                    all_scripts_succeeded = False
+                    # Potentially break here or log and continue
+            if all_scripts_succeeded:
+                ui_utils.print_success("Selected analysis tasks completed.")
+            else:
+                ui_utils.print_warning("Some analysis tasks encountered errors.")
             
-             logger.warning("Skipping custom run execution due to missing selections.")
-             ui_utils.print_warning("Skipping custom run execution due to missing selections.")
+            print(f"Relevant outputs (if any) can be found in: {config.RESULTS_DIR / 'CSV_PLOTS'} and {config.RESULTS_DIR / 'advanced_analysis'}")
+            return # Exit after running selected analysis
 
-    
-    if all_model_runs_summary:
-        logger.info("\nGenerating final summary and charts...")
-        print("\nGenerating final summary and charts...")
+    if run_new_evaluations:
+        all_model_runs_summary = {}
+        logger.info("Proceeding with standard LLM evaluation pipeline.")
+        logger.info("Determining evaluation run type...")
+
         
-        
-        generate_plots_confirm = questionary.confirm(
-            "Do you want to generate plots now? (This may take a few minutes)",
+        use_cache_if_available = questionary.confirm(
+            "Do you want to use existing cached results (if available)? Choosing 'No' will re-run all evaluations.",
             default=True
         ).ask()
 
-        if generate_plots_confirm is None:
-            ui_utils.print_warning("Plot generation preference not selected. Skipping plot generation.")
-            logger.info("User did not select a preference for plot generation. Skipping.")
-        elif generate_plots_confirm:
-            ui_utils.print_info(f"Proceeding with plot generation. Output will be in {config.RESULTS_DIR / 'CSV_PLOTS'}.")
-            logger.info("User opted to generate plots. Attempting to run src.utils.generate_plots_only...")
-            try:
-                
-                python_executable = sys.executable
-                
-                process_result = subprocess.run(
-                    [python_executable, "-m", "src.utils.generate_plots_only"],
-                    capture_output=True,
-                    text=True,
-                    check=False  
-                )
-                if process_result.returncode == 0:
-                    ui_utils.print_success("Plot generation script completed successfully.")
-                    logger.info("Plot generation script (src.utils.generate_plots_only) completed successfully.")
-                    if process_result.stdout:
-                        logger.info(f"Plotting script stdout:\n{process_result.stdout}")
-                    if process_result.stderr: 
-                        logger.warning(f"Plotting script stderr (on success):\n{process_result.stderr}")
-                else:
-                    ui_utils.print_error("Plot generation script encountered an error.")
-                    logger.error(f"Plot generation script (src.utils.generate_plots_only) failed with return code {process_result.returncode}.")
-                    if process_result.stdout:
-                        logger.error(f"Plotting script stdout (on error):\n{process_result.stdout}")
-                    if process_result.stderr:
-                        logger.error(f"Plotting script stderr (on error):\n{process_result.stderr}")
-                ui_utils.print_info(f"Plots (if generated) are in {config.RESULTS_DIR / 'CSV_PLOTS'}")
-
-            except FileNotFoundError:
-                ui_utils.print_error(f"Error: Could not find the Python executable '{sys.executable}' to run the plotting script.")
-                logger.error(f"FileNotFoundError: Python executable '{sys.executable}' not found when trying to run plotting script.", exc_info=True)
-            except Exception as e:
-                ui_utils.print_error(f"An unexpected error occurred while trying to run the plotting script: {e}")
-                logger.error(f"Unexpected error running plotting script: {e}", exc_info=True)
+        if use_cache_if_available is None: 
+            ui_utils.print_warning("Cache preference not selected. Exiting.")
+            return
+        
+        if use_cache_if_available:
+            ui_utils.print_info("Attempting to use cached results where available.")
+            logger.info("User opted to use cached results.")
         else:
-            ui_utils.print_info("Skipping plot generation as per user request.")
-            logger.info("User opted not to generate plots at this time.")
-            
-    else:
-       logger.warning("No models were processed in this run.")
-       ui_utils.print_warning("No models were processed.")
-    
-    logger.info("CFA MCQ Reproducer pipeline finished.")
-    logger.info(f"Results and charts saved in: {config.RESULTS_DIR}")
-    ui_utils.print_info(f"CFA MCQ Reproducer pipeline finished. Results saved in: {config.RESULTS_DIR}")
-    
-    if all_model_runs_summary:
-        logger.info("\n" + "="*30 + " Overall Run Comparison " + "="*30)
-        summary_loading = ui_utils.LoadingAnimation(message="Preparing results summary")
-        summary_loading.start()
-        
-        header = "| {:<45} | {:<25} | {:>8} | {:>12} | {:>15} | {:>19} | {:>18} | {:>15} |".format(
-            "Model", "Strategy", "Accuracy", "Avg Time/Q (s)", "Total Time (s)", "Total Output Tokens", "Avg Ans Len", "Total Cost ($)"
-        )
-        logger.info(header)
-        
-        separator = "|" + "-"*47 + "|" + "-"*27 + "|" + "-"*10 + "|" + "-"*14 + "|" + "-"*17 + "|" + "-"*21 + "|" + "-"*20 + "|" + "-"*17 + "|"
-        logger.info(separator)
+            ui_utils.print_info("Running all evaluations from scratch. Existing cached results will be ignored and overwritten.")
+            logger.info("User opted to run evaluations from scratch.")
 
-        summary_rows_for_print = []
-        for model_id, strategy_data in sorted(all_model_runs_summary.items()): 
-            for strategy, data in strategy_data.items():
-                model_disp = model_id
-                strategy_disp = strategy
-                if "error" in data:    
-                    row_str = "| {:<45} | {:<25} | {:^8} | {:^12} | {:^15} | {:^19} | {:^18} | {:^15} |".format(
-                        model_disp, strategy_disp, "FAILED", f"({data.get('error', 'Unknown')})", "---", "---", "---", "---" 
+        run_mode = questionary.select(
+            "Select run mode:",
+            choices=[
+                {"name": "Run Full Evaluation (All Models, Default + CoT SC N=3/5 + Self-Discover Strategies)", "value": "full"},
+                {"name": "Custom Run (Select Models and Single Strategy)", "value": "custom"},
+            ]
+        ).ask()
+
+        if not run_mode:
+            ui_utils.print_warning("No run mode selected. Exiting.")
+            return
+
+        if run_mode == "full":
+            logger.info("Full evaluation mode selected.")
+            print("\nRunning Full Evaluation...")
+            
+            full_eval_strategies = [
+                "default", 
+                "self_consistency_cot_n3", 
+                "self_consistency_cot_n5",
+                "self_discover"
+            ]
+            
+            for strategy_key_full in full_eval_strategies:
+                print(f"\n--- Starting Full Eval: Strategy '{AVAILABLE_STRATEGIES[strategy_key_full]['name']}' ---")
+                
+                _run_model_evaluations(
+                    processed_data=processed_data,
+                    selected_model_ids=None, 
+                    strategy_key=strategy_key_full,
+                    all_model_runs_summary=all_model_runs_summary,
+                    use_cache=use_cache_if_available
+                )
+                print(f"--- Completed Full Eval: Strategy '{AVAILABLE_STRATEGIES[strategy_key_full]['name']}' ---")
+
+        elif run_mode == "custom":
+            logger.info("Custom run mode selected.")
+            print("\nStarting Custom Run Configuration...")
+            
+            print("\nPreparing available LLM models...")
+            model_loading_anim = ui_utils.LoadingAnimation(message="Loading model configurations") 
+            model_loading_anim.start()
+
+            
+            
+            unique_model_configs_for_listing = configs.DEFAULT_CONFIGS 
+            
+            model_choices = [
+                {
+                    "name": f"{m.get('config_id', m.get('model_id'))} ({m.get('type')})", 
+                    "value": m.get('config_id', m.get('model_id')) 
+                }
+                for m in unique_model_configs_for_listing 
+            ]
+            model_choices.insert(0, {"name": "[Run All Available Models]", "value": "__ALL__"})
+            model_loading_anim.stop()
+            ui_utils.print_info(f"Found {len(unique_model_configs_for_listing)} unique model configurations for selection.")
+
+            print("\nPlease select which LLM models to run:")
+            selected_model_ids = questionary.checkbox(
+                "Select models (space to select, arrows to move, enter to confirm):",
+                choices=model_choices,
+                validate=lambda a: True if a else "Select at least one model."
+            ).ask()
+            if not selected_model_ids:
+                ui_utils.print_warning("No models selected. Exiting.")
+                return
+            strategy_choices = [
+                {"name": details["name"], "value": key}
+                for key, details in AVAILABLE_STRATEGIES.items()
+            ] 
+
+            print("\nPlease select which prompting strategies to use:")
+            selected_strategy_keys = questionary.checkbox(
+                "Select prompting strategies (space to select, arrows to move, enter to confirm):",
+                choices=strategy_choices,
+                validate=lambda a: True if a else "Select at least one strategy."
+            ).ask()
+
+            if not selected_strategy_keys:
+                ui_utils.print_warning("No prompting strategies selected. Exiting.")
+                return
+            
+            if selected_model_ids and selected_strategy_keys:
+                 for selected_strategy_key in selected_strategy_keys:
+                     print(f"\n--- Starting Custom Run: Strategy '{AVAILABLE_STRATEGIES[selected_strategy_key]['name']}' ---")
+                     _run_model_evaluations(
+                         processed_data=processed_data,
+                         selected_model_ids=selected_model_ids, 
+                         strategy_key=selected_strategy_key,
+                         all_model_runs_summary=all_model_runs_summary,
+                         use_cache=use_cache_if_available
+                     )
+                     print(f"--- Completed Custom Run: Strategy '{AVAILABLE_STRATEGIES[selected_strategy_key]['name']}' ---")
+            else:
+                
+                 logger.warning("Skipping custom run execution due to missing selections.")
+                 ui_utils.print_warning("Skipping custom run execution due to missing selections.")
+
+        
+        if all_model_runs_summary:
+            logger.info("\nGenerating final summary and charts...")
+            print("\nGenerating final summary and charts...")
+            
+            
+            generate_plots_confirm = questionary.confirm(
+                "Do you want to generate plots now? (This may take a few minutes)",
+                default=True
+            ).ask()
+
+            if generate_plots_confirm is None:
+                ui_utils.print_warning("Plot generation preference not selected. Skipping plot generation.")
+                logger.info("User did not select a preference for plot generation. Skipping.")
+            elif generate_plots_confirm:
+                ui_utils.print_info(f"Proceeding with plot generation. Output will be in {config.RESULTS_DIR / 'CSV_PLOTS'}.")
+                logger.info("User opted to generate plots. Attempting to run src.utils.generate_plots_only...")
+                try:
+                    
+                    python_executable = sys.executable
+                    
+                    process_result = subprocess.run(
+                        [python_executable, "-m", "src.utils.generate_plots_only"],
+                        capture_output=True,
+                        text=True,
+                        check=False  
                     )
-                else:          
-                    total_time_s = data.get('total_run_time_s')
-                    total_time_str = f"{total_time_s:.2f}" if total_time_s is not None else "N/A"
-                    time_s = data.get('average_latency_ms')
-                    time_str = f"{time_s:.2f}" if time_s is not None else "N/A"
-                    tokens = data.get('total_output_tokens')
-                    token_str = f"{tokens:.0f}" if tokens is not None else "N/A"
-                    ans_len = data.get('avg_answer_length')
-                    ans_len_str = f"{ans_len:.1f}" if ans_len is not None else "N/A"
-                    acc = data.get('accuracy', 0.0)
-                    cost = data.get('total_cost')
-                    cost_str = f"${cost:.4f}" if cost is not None and cost > 0 else ("$0.0000" if cost == 0 else "N/A")
-                    row_str = "| {:<45} | {:<25} | {:>8.4f} | {:>12} | {:>15} | {:>19} | {:>18} | {:>15} |".format(
-                        model_disp, strategy_disp, acc, time_str, total_time_str, token_str, ans_len_str, cost_str
-                    )
-                logger.info(row_str)
-                summary_rows_for_print.append(row_str)
-        final_separator = separator
-        logger.info(final_separator)
-        summary_loading.stop()
-        print("\n" + "="*30 + " Overall Run Comparison " + "="*30)
-        print(header)
-        print(separator) 
-        for row in summary_rows_for_print:
-            print(row)
-        print(final_separator) 
-    else:
-       logger.warning("No models were processed in this run.")
-       ui_utils.print_warning("No models were processed.")
-    
-    logger.info("CFA MCQ Reproducer pipeline finished.")
-    logger.info(f"Results and charts saved in: {config.RESULTS_DIR}")
-    ui_utils.print_info(f"CFA MCQ Reproducer pipeline finished. Results saved in: {config.RESULTS_DIR}")
+                    if process_result.returncode == 0:
+                        ui_utils.print_success("Plot generation script completed successfully.")
+                        logger.info("Plot generation script (src.utils.generate_plots_only) completed successfully.")
+                        if process_result.stdout:
+                            logger.info(f"Plotting script stdout:\n{process_result.stdout}")
+                        if process_result.stderr: 
+                            logger.warning(f"Plotting script stderr (on success):\n{process_result.stderr}")
+                    else:
+                        ui_utils.print_error("Plot generation script encountered an error.")
+                        logger.error(f"Plot generation script (src.utils.generate_plots_only) failed with return code {process_result.returncode}.")
+                        if process_result.stdout:
+                            logger.error(f"Plotting script stdout (on error):\n{process_result.stdout}")
+                        if process_result.stderr:
+                            logger.error(f"Plotting script stderr (on error):\n{process_result.stderr}")
+                    ui_utils.print_info(f"Plots (if generated) are in {config.RESULTS_DIR / 'CSV_PLOTS'}")
+
+                except FileNotFoundError:
+                    ui_utils.print_error(f"Error: Could not find the Python executable '{sys.executable}' to run the plotting script.")
+                    logger.error(f"FileNotFoundError: Python executable '{sys.executable}' not found when trying to run plotting script.", exc_info=True)
+                except Exception as e:
+                    ui_utils.print_error(f"An unexpected error occurred while trying to run the plotting script: {e}")
+                    logger.error(f"Unexpected error running plotting script: {e}", exc_info=True)
+            else:
+                ui_utils.print_info("Skipping plot generation as per user request.")
+                logger.info("User opted not to generate plots at this time.")
+                
+        else:
+           logger.warning("No models were processed in this run.")
+           ui_utils.print_warning("No models were processed.")
+        
+        logger.info("CFA MCQ Reproducer pipeline finished.")
+        logger.info(f"Results and charts saved in: {config.RESULTS_DIR}")
+        ui_utils.print_info(f"CFA MCQ Reproducer pipeline finished. Results saved in: {config.RESULTS_DIR}")
+        
+        if all_model_runs_summary and run_new_evaluations: # Ensure summary is printed only if new evals were run
+            logger.info("\n" + "="*30 + " Overall Run Comparison " + "="*30)
+            summary_loading = ui_utils.LoadingAnimation(message="Preparing results summary")
+            summary_loading.start()
+            
+            header = "| {:<45} | {:<25} | {:>8} | {:>12} | {:>15} | {:>19} | {:>18} | {:>15} |".format(
+                "Model", "Strategy", "Accuracy", "Avg Time/Q (s)", "Total Time (s)", "Total Output Tokens", "Avg Ans Len", "Total Cost ($)"
+            )
+            logger.info(header)
+            
+            separator = "|" + "-"*47 + "|" + "-"*27 + "|" + "-"*10 + "|" + "-"*14 + "|" + "-"*17 + "|" + "-"*21 + "|" + "-"*20 + "|" + "-"*17 + "|"
+            logger.info(separator)
+
+            summary_rows_for_print = []
+            for model_id, strategy_data in sorted(all_model_runs_summary.items()): 
+                for strategy, data in strategy_data.items():
+                    model_disp = model_id
+                    strategy_disp = strategy
+                    if "error" in data:    
+                        row_str = "| {:<45} | {:<25} | {:^8} | {:^12} | {:^15} | {:^19} | {:^18} | {:^15} |".format(
+                            model_disp, strategy_disp, "FAILED", f"({data.get('error', 'Unknown')})", "---", "---", "---", "---" 
+                        )
+                    else:          
+                        total_time_s = data.get('total_run_time_s')
+                        total_time_str = f"{total_time_s:.2f}" if total_time_s is not None else "N/A"
+                        time_s = data.get('average_latency_ms')
+                        time_str = f"{time_s:.2f}" if time_s is not None else "N/A"
+                        tokens = data.get('total_output_tokens')
+                        token_str = f"{tokens:.0f}" if tokens is not None else "N/A"
+                        ans_len = data.get('avg_answer_length')
+                        ans_len_str = f"{ans_len:.1f}" if ans_len is not None else "N/A"
+                        acc = data.get('accuracy', 0.0)
+                        cost = data.get('total_cost')
+                        cost_str = f"${cost:.4f}" if cost is not None and cost > 0 else ("$0.0000" if cost == 0 else "N/A")
+                        row_str = "| {:<45} | {:<25} | {:>8.4f} | {:>12} | {:>15} | {:>19} | {:>18} | {:>15} |".format(
+                            model_disp, strategy_disp, acc, time_str, total_time_str, token_str, ans_len_str, cost_str
+                        )
+                    logger.info(row_str)
+                    summary_rows_for_print.append(row_str)
+            final_separator = separator
+            logger.info(final_separator)
+            summary_loading.stop()
+            print("\n" + "="*30 + " Overall Run Comparison " + "="*30)
+            print(header)
+            print(separator) 
+            for row in summary_rows_for_print:
+                print(row)
+            print(final_separator) 
+        else:
+           logger.warning("No models were processed in this run.")
+           ui_utils.print_warning("No models were processed.")
+        
+        logger.info("CFA MCQ Reproducer pipeline finished.")
+        logger.info(f"Results and charts saved in: {config.RESULTS_DIR}")
+        ui_utils.print_info(f"CFA MCQ Reproducer pipeline finished. Results saved in: {config.RESULTS_DIR}")
 
 if __name__ == "__main__":
     main()

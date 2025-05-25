@@ -41,6 +41,30 @@ ALL_MODEL_CONFIGS_COT = [
         }
     },
     {
+        "config_id": "claude-opus-4-cot",
+        "type": "anthropic",
+        "model_id": "claude-opus-4-20250514",
+        "prompt_strategy_type": "COHERENT_CFA_COT",
+        "parameters": {
+            "temperature": 0.5,
+            "top_p": 0.999,
+            "top_k": 250,
+            "max_tokens": 32000
+        }
+    },
+    {
+        "config_id": "claude-sonnet-4-cot",
+        "type": "anthropic",
+        "model_id": "claude-sonnet-4-20250514",
+        "prompt_strategy_type": "COHERENT_CFA_COT",
+        "parameters": {
+            "temperature": 0.5,
+            "top_p": 0.999,
+            "top_k": 250,
+            "max_tokens": 64000
+        }
+    },
+    {
         "config_id": "claude-3.5-sonnet-cot",
         "type": "anthropic",
         "model_id": "claude-3-5-sonnet-20241022",

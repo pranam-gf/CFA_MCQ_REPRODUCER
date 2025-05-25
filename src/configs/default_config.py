@@ -16,6 +16,28 @@ ALL_MODEL_CONFIGS = [
     }
     },
     {
+        "config_id": "claude-opus-4",
+        "type": "anthropic",
+        "model_id": "claude-opus-4-20250514",
+        "parameters": {
+            "temperature": 0.1,
+            "top_p": 0.999,
+            "top_k": 250,
+            "max_tokens": 10
+        }
+    },
+    {
+        "config_id": "claude-sonnet-4",
+        "type": "anthropic",
+        "model_id": "claude-sonnet-4-20250514",
+        "parameters": {
+            "temperature": 0.1,
+            "top_p": 0.999,
+            "top_k": 250,
+            "max_tokens": 10
+        }
+    },
+    {
         "config_id": "claude-3.5-sonnet",
         "type": "anthropic",
         "model_id": "claude-3-5-sonnet-20241022",
