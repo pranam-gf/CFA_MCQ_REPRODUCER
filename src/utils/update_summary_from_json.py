@@ -280,7 +280,7 @@ def main():
     if 'Strategy' in sort_by_columns and 'Model' in sort_by_columns:
         logger.info(f"Sorting final DataFrame by {sort_by_columns}.")
         final_df = final_df.sort_values(by=sort_by_columns, ascending=True)
-        final_df = final_df.reset_index(drop=True) # Reset index after sorting
+        final_df = final_df.reset_index(drop=True) 
     else:
         logger.warning(
             f"Skipping primary sort as 'Strategy' or 'Model' column is missing. "

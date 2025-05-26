@@ -1453,6 +1453,78 @@ def plot_model_aggregate_metrics(advanced_analysis_dir: Path, output_dir: Path):
         except Exception as e:
             logger.warning(f"Could not save {readable_name} by Model plot: {e}")
 
+def plot_performance_tiers(all_model_runs_summary_dict: Dict[str, Any], output_dir: Path):
+    """
+    Generates a bar chart showing the distribution of models across performance tiers
+    based on their accuracy with the 'Default (Single Pass)' strategy.
+    """
+    logger.info("Generating performance tier distribution plot...")
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    model_accuracies = []
+    default_strategy_name = "Default (Single Pass)" 
+
+    for model_id, strategies in all_model_runs_summary_dict.items():
+        if default_strategy_name in strategies:
+            accuracy = strategies[default_strategy_name].get('accuracy')
+            if accuracy is not None and isinstance(accuracy, (float, int)):
+                model_accuracies.append({'Model': model_id, 'Accuracy': accuracy * 100}) # Convert to percentage
+            else:
+                logger.debug(f"Model '{model_id}' with strategy '{default_strategy_name}' has no valid accuracy: {strategies[default_strategy_name].get('accuracy')}")
+        else:
+            logger.debug(f"Strategy '{default_strategy_name}' not found for model '{model_id}'. Available: {list(strategies.keys())}")
+
+    if not model_accuracies:
+        logger.warning(f"No models found with accuracy data for the '{default_strategy_name}' strategy. Cannot generate performance tier plot.")
+        ui_utils.print_warning(f"No models found with accuracy data for the '{default_strategy_name}' strategy. Performance tier plot will not be generated.")
+        return
+
+    df = pd.DataFrame(model_accuracies)
+
+    bins_revised = [-1, 49.999, 59.999, 69.999, 77.001, 101] 
+    labels_revised = [
+        "Sub-50% (<50%)", 
+        "Developing (50-59.9%)", 
+        "Mid-Tier (60-69.9%)", 
+        "Frontier (70-77%)",
+        "Above Frontier (>77%)" 
+    ]
+
+    df['Performance Tier'] = pd.cut(df['Accuracy'], bins=bins_revised, labels=labels_revised, right=True, include_lowest=True)
+
+    tier_counts = df['Performance Tier'].value_counts().reindex(labels_revised).fillna(0)
+
+    plt.figure(figsize=(10, 7))
+    palette = sns.color_palette("viridis", n_colors=len(labels_revised))
+    bars = sns.barplot(x=tier_counts.index, y=tier_counts.values, palette=palette)
+    
+    plt.title('Model Performance Distribution by Accuracy Tiers (Default Strategy)', fontsize=16, pad=20)
+    plt.xlabel('Performance Tier', fontsize=14, labelpad=15)
+    plt.ylabel('Number of Models', fontsize=14, labelpad=15)
+    plt.xticks(rotation=25, ha='right', fontsize=11)
+    plt.yticks(fontsize=11)
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+    sns.despine(trim=True)
+
+    for i, bar in enumerate(bars.patches):
+        height = bar.get_height()
+        if height > 0:
+            plt.text(bar.get_x() + bar.get_width() / 2., height + 0.15, 
+                     f'{int(height)}', ha='center', va='bottom', fontsize=11, color='black')
+
+    plt.tight_layout(pad=1.5)
+    
+    plot_filename = output_dir / "model_performance_tiers_distribution.png"
+    try:
+        plt.savefig(plot_filename, dpi=300, bbox_inches='tight')
+        logger.info(f"Successfully saved performance tier plot to {plot_filename}")
+        ui_utils.print_success(f"Performance tier distribution plot saved to {plot_filename}")
+    except Exception as e:
+        logger.error(f"Error saving performance tier plot to {plot_filename}: {e}", exc_info=True)
+        ui_utils.print_error(f"Could not save performance tier plot: {e}")
+    finally:
+        plt.close()
+
 
     
     

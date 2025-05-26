@@ -256,6 +256,11 @@ def main():
         else:
             logger.warning(f"Advanced analysis CSV directory not found: {advanced_analysis_csv_dir}. Skipping plots from derived metrics.")
 
+        if 'plot_performance_tiers' in dir(plotting) and all_model_runs_summary:
+            plotting.plot_performance_tiers(all_model_runs_summary, model_type_plots_dir)
+        else:
+            logger.warning("'plot_performance_tiers' function not found in plotting module or no summary data. Skipping performance tier plot.")
+
         chart_gen_anim.stop()
         ui_utils.print_success(f"Charts generated successfully in {base_charts_output_dir} and its subdirectories.")
         logger.info(f"Charts generated successfully in {base_charts_output_dir} and its subdirectories.")
