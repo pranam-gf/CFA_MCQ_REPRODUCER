@@ -41,27 +41,45 @@ def calculate_model_cost(results_data: List[Dict[str, Any]], model_config_item: 
     pricing = None
     price_per_input_token = 0.0
     price_per_output_token = 0.0
+    price_per_reasoning_token = 0.0
 
     pricing = get_pricing(model_type, model_id)
 
     if pricing:
-        price_per_input_token = pricing.get("prompt_tokens_cost_per_million", 0.0) / 1_000_000
-        price_per_output_token = pricing.get("completion_tokens_cost_per_million", 0.0) / 1_000_000
+        # Handle both old format (direct keys) and new format (input/output keys)
+        if "input" in pricing and "output" in pricing:
+            price_per_input_token = pricing.get("input", 0.0)
+            price_per_output_token = pricing.get("output", 0.0)
+        else:
+            price_per_input_token = pricing.get("prompt_tokens_cost_per_million", 0.0) / 1_000_000
+            price_per_output_token = pricing.get("completion_tokens_cost_per_million", 0.0) / 1_000_000
+        
+        if model_type == "openai" and model_id.startswith("o3-pro") and "reasoning" in pricing:
+            price_per_reasoning_token = pricing.get("reasoning", 0.0)
+        elif "reasoning_tokens_cost_per_million" in pricing:
+             price_per_reasoning_token = pricing.get("reasoning_tokens_cost_per_million", 0.0) / 1_000_000
     else:
         logger.warning(f"Skipping cost calculation for run using model ID '{model_id}' (type: {model_type}) as pricing is not defined.")
         return {"total_cost": 0.0}
 
-    if price_per_input_token == 0.0 and price_per_output_token == 0.0:
-        logger.warning(f"Both input and output token prices are effectively zero for model '{model_id}' (type: {model_type}) after lookup. Cost will be zero.")
+    if price_per_input_token == 0.0 and price_per_output_token == 0.0 and price_per_reasoning_token == 0.0:
+        logger.warning(f"All input, output, and reasoning token prices are effectively zero for model '{model_id}' (type: {model_type}) after lookup. Cost will be zero.")
         return {"total_cost": 0.0}
     
     num_items_missing_tokens = 0
     for item in results_data:
         input_tokens = item.get('input_tokens')
         output_tokens = item.get('output_tokens')
+        reasoning_tokens = item.get('reasoning_tokens')
 
-        if isinstance(input_tokens, (int, float)) and isinstance(output_tokens, (int, float)):
+        item_cost = 0.0
+        has_input_output_tokens = isinstance(input_tokens, (int, float)) and isinstance(output_tokens, (int, float))
+        
+        if has_input_output_tokens:
             item_cost = (input_tokens * price_per_input_token) + (output_tokens * price_per_output_token)
+            if model_type == "openai" and model_id.startswith("o3-pro") and isinstance(reasoning_tokens, (int, float)) and reasoning_tokens > 0 and price_per_reasoning_token > 0:
+                item_cost += (reasoning_tokens * price_per_reasoning_token)
+                logger.debug(f"Added reasoning cost for {model_id}: {reasoning_tokens} tokens * {price_per_reasoning_token} price/token")
             total_cost += item_cost
         else:
             num_items_missing_tokens += 1
@@ -71,4 +89,4 @@ def calculate_model_cost(results_data: List[Dict[str, Any]], model_config_item: 
         logger.warning(f"Cost calculation for {model_id} (type: {model_type}) might be incomplete. Missing token data for {num_items_missing_tokens}/{len(results_data)} items.")
 
     logger.info(f"Estimated cost for {model_type} model {model_id}: ${total_cost:.6f}")
-    return {"total_cost": total_cost} 
+    return {"total_cost": total_cost}

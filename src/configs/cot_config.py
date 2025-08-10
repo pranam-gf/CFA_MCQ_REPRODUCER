@@ -53,6 +53,30 @@ ALL_MODEL_CONFIGS_COT = [
         }
     },
     {
+        "config_id": "claude-opus-4.1-cot",
+        "type": "anthropic",
+        "model_id": "claude-opus-4-1-20250805",
+        "prompt_strategy_type": "COHERENT_CFA_COT",
+        "parameters": {
+            "temperature": 0.1,
+            "max_tokens": 32000
+     
+        }
+    },
+    {
+        "config_id": "claude-opus-4.1-thinking",
+        "type": "anthropic",
+        "model_id": "claude-opus-4-1-20250805",
+        "parameters": {
+            "temperature": 1,
+            "max_tokens": 32000,
+            "thinking": {
+                "type": "enabled",
+                "budget_tokens": 30000
+            }
+        }
+    },
+    {
         "config_id": "claude-sonnet-4-cot",
         "type": "anthropic",
         "model_id": "claude-sonnet-4-20250514",
@@ -131,13 +155,20 @@ ALL_MODEL_CONFIGS_COT = [
         }
     },
     {
-        "config_id": "o4-mini",
+        "config_id": "o4-mini-cot",
+        "model_id": "o4-mini-2025-04-16",
         "type": "openai",
-        "model_id": "o4-mini-2025-04-16", 
+        "name": "O4 Mini (CoT)",
+        "temperature": 0.7,
+    },
+    {
+        "config_id": "o3-pro-cot",
+        "model_id": "o3-pro-2025-06-10",
+        "type": "openai",
         "prompt_strategy_type": "COHERENT_CFA_COT",
         "parameters": {
-            "temperature": 0.5,
-            "response_format": {"type": "json_object"}
+            "temperature": 0.1,
+            "reasoning": {"effort": "high"}
         }
     },
     {
@@ -202,6 +233,15 @@ ALL_MODEL_CONFIGS_COT = [
             "max_tokens": 16384
         }
     },
+    {
+        "config_id": "grok-4-0709-cot",
+        "type": "xai",
+        "model_id": "grok-4-0709",
+        "prompt_strategy_type": "COHERENT_CFA_COT",
+        "parameters": {
+            "temperature": 0
+        }
+    },
 
     
     {
@@ -263,5 +303,102 @@ ALL_MODEL_CONFIGS_COT = [
             "top_p": 0.9,
             "max_tokens": 8192
         }
+    },
+    {
+        "config_id": "groq-gpt-oss-20b-cot",
+        "type": "groq",
+        "model_id": "openai/gpt-oss-20b",
+        "prompt_strategy_type": "COHERENT_CFA_COT",
+        "parameters": {
+            "temperature":0.1,
+            "top_p": 0.9
+        }
+    },
+    {
+        "config_id": "groq-gpt-oss-120b-cot",
+        "type": "groq",
+        "model_id": "openai/gpt-oss-120b",
+        "prompt_strategy_type": "COHERENT_CFA_COT",
+        "parameters": {
+            "temperature": 0.1,
+            "top_p": 0.9
+        }
+    },
+    {
+        "config_id": "groq-kimi-k2-cot",
+        "type": "groq",
+        "model_id": "moonshotai/kimi-k2-instruct",
+        "prompt_strategy_type": "COHERENT_CFA_COT",
+        "parameters": {
+            "temperature": 0.1
+        }
+    },
+    {
+        "config_id": "groq-qwen3-32b-cot",
+        "type": "groq",
+        "model_id": "qwen/qwen3-32b",
+        "prompt_strategy_type": "COHERENT_CFA_COT",
+        "parameters": {
+            "temperature": 0.1,
+            "top_p": 0.9
+        }
+    },
+    {
+        "config_id": "gpt-5-cot",
+        "type": "openai",
+        "model_id": "gpt-5-2025-08-07",
+        "prompt_strategy_type": "COHERENT_CFA_COT",
+        "parameters": {
+            "reasoning": {"effort": "high"}
+            
+        }
+    },
+    {
+        "config_id": "gpt-5-mini-cot",
+        "type": "openai",
+        "model_id": "gpt-5-mini-2025-08-07",
+        "prompt_strategy_type": "COHERENT_CFA_COT",
+        "parameters": {
+            "reasoning": {"effort": "high"}
+        }
+    },
+    {
+        "config_id": "gpt-5-nano-cot",
+        "type": "openai",
+        "model_id": "gpt-5-nano-2025-08-07",
+        "prompt_strategy_type": "COHERENT_CFA_COT",
+        "parameters": {
+            "reasoning": {"effort": "high"}
+        }
+    },
+    {
+        "config_id": "o1-mini-cot",
+        "type": "openai",
+        "model_id": "o1-mini-2024-09-12",
+        "prompt_strategy_type": "COHERENT_CFA_COT",
+        "parameters": {
+            "reasoning":{"effort": "high"},
+            "max_tokens": 65536
+        }
+    },
+    {
+        "config_id": "o3-cot",
+        "type": "openai",
+        "model_id": "o3-2025-04-16",
+        "prompt_strategy_type": "COHERENT_CFA_COT",
+        "parameters": {
+            "reasoning":{"effort": "high"},
+            "max_tokens": 100000
+        }
+    },
+    {
+        "config_id": "o3-pro-cot",
+        "type": "openai",
+        "model_id": "o3-pro-2025-06-10",
+        "prompt_strategy_type": "COHERENT_CFA_COT",
+        "parameters": {
+            "reasoning": {"effort": "high"},
+            "max_tokens": 100000
+        }
     }
-] 
+]

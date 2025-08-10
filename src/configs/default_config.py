@@ -38,6 +38,29 @@ ALL_MODEL_CONFIGS = [
         }
     },
     {
+        "config_id": "claude-opus-4.1",
+        "type": "anthropic",
+        "model_id": "claude-opus-4-1-20250805",
+        "parameters": {
+            "temperature": 0.1,
+            "max_tokens": 32000
+
+        }
+    },
+    {
+        "config_id": "claude-opus-4.1-thinking",
+        "type": "anthropic",
+        "model_id": "claude-opus-4-1-20250805",
+        "parameters": {
+            "temperature": 1,
+            "max_tokens": 32000,
+            "thinking": {
+                "type": "enabled",
+                "budget_tokens": 31900
+            }
+        }
+    },
+    {
         "config_id": "claude-3.5-sonnet",
         "type": "anthropic",
         "model_id": "claude-3-5-sonnet-20241022",
@@ -172,6 +195,14 @@ ALL_MODEL_CONFIGS = [
             "reasoning_effort": "low"
         }
     },
+    {
+        "config_id": "grok-4-0709",
+        "type": "xai",
+        "model_id": "grok-4-0709",
+        "parameters": {
+            "temperature": 0
+        }
+    },
     
     {
     "config_id": "gemini-2.5-pro",
@@ -243,4 +274,90 @@ ALL_MODEL_CONFIGS = [
             "max_tokens": 10
         }
     },
-] 
+    {
+        "config_id": "groq-gpt-oss-20b",
+        "type": "groq",
+        "model_id": "openai/gpt-oss-20b",
+        "parameters": {
+            "temperature": 0.1,
+            "top_p": 0.9
+        }
+    },
+    {
+        "config_id": "groq-gpt-oss-120b",
+        "type": "groq",
+        "model_id": "openai/gpt-oss-120b",
+        "parameters": {
+            "temperature": 0.1,
+            "top_p": 0.9
+        }
+    },
+    {
+        "config_id": "groq-kimi-k2",
+        "type": "groq",
+        "model_id": "moonshotai/kimi-k2-instruct",
+        "parameters": {
+            "temperature": 0.1
+        }
+    },
+    {
+        "config_id": "groq-qwen3-32b",
+        "type": "groq",
+        "model_id": "qwen/qwen3-32b",
+        "parameters": {
+            "temperature": 0.1,
+            "top_p": 0.9
+        }
+    },
+    {
+        "config_id": "gpt-5",
+        "type": "openai",
+        "model_id": "gpt-5-2025-08-07",
+        "parameters": {
+            "reasoning": {"effort": "high"}
+        }
+    },
+    {
+        "config_id": "gpt-5-mini",
+        "type": "openai",
+        "model_id": "gpt-5-mini-2025-08-07",
+        "parameters": {
+            "reasoning": {"effort": "high"}
+        }
+    },
+    {
+        "config_id": "gpt-5-nano",
+        "type": "openai",
+        "model_id": "gpt-5-nano-2025-08-07",
+        "parameters": {
+            "reasoning": {"effort": "high"}
+        }
+    },
+    {
+        "config_id": "o1-mini",
+        "type": "openai",
+        "model_id": "o1-mini-2024-09-12",
+        "parameters": {
+            "reasoning": {"effort": "high"},
+            "max_completion_tokens": 1000
+        }
+    },
+    {
+        "config_id": "o3",
+        "type": "openai",
+        "model_id": "o3-2025-04-16",
+        "parameters": {
+            "reasoning": {"effort": "high"},
+            "max_completion_tokens": 1000
+        }
+    },
+    {
+        "config_id": "o3-pro",
+        "type": "openai",
+        "model_id": "o3-pro-2025-06-10",
+        "parameters": {
+            "reasoning": {"effort": "high"},
+            "max_completion_tokens": 1000
+        }
+    },
+]

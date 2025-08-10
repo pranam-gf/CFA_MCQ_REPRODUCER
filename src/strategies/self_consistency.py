@@ -107,13 +107,12 @@ def run_self_consistency_strategy(data: list[dict], model_config_item: dict, cot
     config_id = model_config_item.get("config_id", model_config_item.get("model_id"))
     model_type = model_config_item.get("type") 
     sampling_params = model_config_item.get("parameters", {}).copy()
-    sampling_params['temperature'] = sampling_params.get('temperature_cot_sampling', 0.7) 
+    
+    if 'temperature_cot_sampling' in sampling_params:
+        sampling_params['temperature'] = sampling_params['temperature_cot_sampling']
     
     if 'max_tokens_cot' in sampling_params:
         sampling_params['max_tokens'] = sampling_params['max_tokens_cot']
-    elif 'max_tokens' not in sampling_params:
-        sampling_params['max_tokens'] = 4000
-    
     sampling_params.pop('response_format', None)
 
     loading_animation = None
@@ -219,4 +218,4 @@ def run_self_consistency_strategy(data: list[dict], model_config_item: dict, cot
     if loading_animation: 
         loading_animation.message = f"Processing with {config_id}"
 
-    return results_for_all_questions 
+    return results_for_all_questions

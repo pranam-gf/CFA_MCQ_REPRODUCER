@@ -102,13 +102,14 @@ def model_type_analysis(df, charts_dir, csv_dir):
 
     # Average cost by model type
     avg_cost_by_type = df.groupby("Model Type")["Total Cost ($)"].mean().reset_index()
+    avg_cost_by_type = avg_cost_by_type.rename(columns={"Total Cost ($)": "Average Cost ($)"})
     print("\nAverage Total Cost ($) by Model Type:")
     print(avg_cost_by_type)
     avg_cost_by_type.to_csv(os.path.join(csv_dir, "avg_cost_by_model_type.csv"), index=False)
     print(f"Saved avg_cost_by_model_type.csv to {csv_dir}")
     
     plt.figure(figsize=(8, 5))
-    sns.barplot(data=avg_cost_by_type, x="Model Type", y="Total Cost ($)")
+    sns.barplot(data=avg_cost_by_type, x="Model Type", y="Average Cost ($)")
     plt.title("Average Total Cost ($) by Model Type")
     plt.tight_layout()
     plt.savefig(os.path.join(charts_dir, "avg_cost_by_model_type.png"))
@@ -165,13 +166,14 @@ def prompt_strategy_effectiveness(df, charts_dir, csv_dir):
 
     # Average cost by strategy
     avg_cost_by_strategy = df.groupby("Strategy")["Total Cost ($)"].mean().sort_values(ascending=True).reset_index()
+    avg_cost_by_strategy = avg_cost_by_strategy.rename(columns={"Total Cost ($)": "Average Cost ($)"})
     print("\nAverage Total Cost ($) by Strategy:")
     print(avg_cost_by_strategy)
     avg_cost_by_strategy.to_csv(os.path.join(csv_dir, "avg_cost_by_strategy.csv"), index=False)
     print(f"Saved avg_cost_by_strategy.csv to {csv_dir}")
 
     plt.figure(figsize=(10, 6))
-    sns.barplot(data=avg_cost_by_strategy, x="Strategy", y="Total Cost ($)")
+    sns.barplot(data=avg_cost_by_strategy, x="Strategy", y="Average Cost ($)")
     plt.title("Average Total Cost ($) by Prompt Strategy")
     plt.xticks(rotation=45, ha="right")
     plt.tight_layout()

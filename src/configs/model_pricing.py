@@ -6,6 +6,7 @@ This file centralizes all pricing information used for cost calculations in the 
 making it easier to update prices and ensuring consistency across the codebase.
 """
 import logging
+from typing import Optional, Dict
 logger = logging.getLogger(__name__)
 
 OPENAI_PRICING = {
@@ -41,6 +42,23 @@ OPENAI_PRICING = {
         "prompt_tokens_cost_per_million": 0.10,
         "completion_tokens_cost_per_million": 0.40,
     },
+    "o3-pro-2025-06-10": {
+        "prompt_tokens_cost_per_million": 20.00,
+        "completion_tokens_cost_per_million": 80.00,
+        "reasoning_tokens_cost_per_million": 2.00,
+    },
+    "gpt-5-2025-08-07": {
+        "prompt_tokens_cost_per_million": 1.25,
+        "completion_tokens_cost_per_million": 10.00,
+    },
+    "gpt-5-mini-2025-08-07": {
+        "prompt_tokens_cost_per_million": 0.25,
+        "completion_tokens_cost_per_million": 2.00,
+    },
+    "gpt-5-nano-2025-08-07": {
+        "prompt_tokens_cost_per_million": 0.05,
+        "completion_tokens_cost_per_million": 0.40,
+    }
 }
 
 ANTHROPIC_PRICING = {
@@ -72,6 +90,10 @@ ANTHROPIC_PRICING = {
         "prompt_tokens_cost_per_million": 0.25,
         "completion_tokens_cost_per_million": 1.25,
     },
+    "claude-opus-4-1-20250805": {
+        "prompt_tokens_cost_per_million": 15.00,
+        "completion_tokens_cost_per_million": 75.00,
+    }
 }
 
 GEMINI_PRICING = {
@@ -106,7 +128,23 @@ GROQ_PRICING = {
     "deepseek-r1-distill-llama-70b": {
         "prompt_tokens_cost_per_million": 0.75,
         "completion_tokens_cost_per_million": 0.99,
-    }
+    },
+        "openai/gpt-oss-20b": {
+        "prompt_tokens_cost_per_million": 0.10,
+        "completion_tokens_cost_per_million": 0.50,
+    },
+        "openai/gpt-oss-120b": {
+        "prompt_tokens_cost_per_million": 0.15,
+        "completion_tokens_cost_per_million": 0.75,
+    },
+    "moonshotai/kimi-k2-instruct": {
+        "prompt_tokens_cost_per_million": 1.00,
+        "completion_tokens_cost_per_million": 3.00,
+    },
+    "qwen/qwen3-32b": {
+        "prompt_tokens_cost_per_million": 0.29,
+        "completion_tokens_cost_per_million": 0.59,
+    },
 }
 
 MISTRAL_PRICING = {
@@ -142,6 +180,11 @@ GROK_PRICING = {
         "prompt_tokens_cost_per_million": 0.60,
         "completion_tokens_cost_per_million": 4.00,
         "context_window": 131072
+    },
+    "grok-4-0709": {
+        "prompt_tokens_cost_per_million": 3.00,
+        "completion_tokens_cost_per_million": 15.00,
+        "context_window": 256000
     }
 }       
 
@@ -172,29 +215,46 @@ def get_pricing(model_type: str, model_id: str):
         return None  
     return lookup_function(model_id)
 
-def get_openai_pricing(model_id: str):
-    """Looks up the pricing for a given OpenAI model ID."""
+def get_openai_pricing(model_id: str) -> Optional[Dict[str, float]]:
+    """
+    Retrieves the pricing for a given OpenAI model ID.
+    Handles variations like preview versions by stripping common suffixes.
+    """
     pricing = OPENAI_PRICING.get(model_id)
-    
-    if not pricing:
-        parts = model_id.split('-')
-        base_model_candidate = parts[0] + '-' + parts[1] if len(parts) > 1 else model_id 
-        if len(parts) > 2 and (parts[1] == '3.5' or parts[1] == '4'): 
-             base_model_candidate += '-' + parts[2]
 
-        if base_model_candidate != model_id:
-             pricing = OPENAI_PRICING.get(base_model_candidate)
+    if pricing:
+        input_cost_per_million = pricing.get("prompt_tokens_cost_per_million")
+        output_cost_per_million = pricing.get("completion_tokens_cost_per_million")
+        reasoning_cost_per_million = pricing.get("reasoning_tokens_cost_per_million")
 
-        if not pricing and model_id.startswith('gpt-4.1-'): 
-             pricing = OPENAI_PRICING.get('gpt-4.1')
-        
-        if not pricing and model_id.startswith('ft:gpt-3.5-turbo'):
-            logger.warning(f"Using placeholder pricing for fine-tuned model '{model_id}'. Verify actual costs.")
-            
-    if not pricing:
-        logger.warning(f"Pricing not found for OpenAI model ID: '{model_id}'")
-        
-    return pricing
+        if input_cost_per_million is not None and output_cost_per_million is not None:
+            result = {
+                "input": input_cost_per_million / 1_000_000,
+                "output": output_cost_per_million / 1_000_000
+            }
+            if reasoning_cost_per_million is not None:
+                result["reasoning"] = reasoning_cost_per_million / 1_000_000
+            return result
+        else:
+            logger.warning(f"Found pricing entry for OpenAI model ID: '{model_id}', but keys for input/output costs are missing or inconsistent. Cost will be $0.")
+            return None
+
+    if model_id == "o4-mini-2025-04-16" and "o4-mini" in OPENAI_PRICING:
+        pricing_fallback = OPENAI_PRICING["o4-mini"]
+        input_cost = pricing_fallback.get("prompt_tokens_cost_per_million")
+        output_cost = pricing_fallback.get("completion_tokens_cost_per_million")
+        if input_cost is not None and output_cost is not None:
+            return {"input": input_cost / 1_000_000, "output": output_cost / 1_000_000}
+
+    if model_id == "o3-mini-2025-01-31" and "o3-mini" in OPENAI_PRICING:
+        pricing_fallback = OPENAI_PRICING["o3-mini"]
+        input_cost = pricing_fallback.get("prompt_tokens_cost_per_million")
+        output_cost = pricing_fallback.get("completion_tokens_cost_per_million")
+        if input_cost is not None and output_cost is not None:
+            return {"input": input_cost / 1_000_000, "output": output_cost / 1_000_000}
+
+    logger.warning(f"Pricing not found for OpenAI model ID: '{model_id}'. Cost will be $0.")
+    return None
 
 def get_anthropic_pricing(model_id: str):
     """Returns the pricing for Anthropic models."""

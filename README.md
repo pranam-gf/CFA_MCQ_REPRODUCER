@@ -25,8 +25,14 @@ This comprehensive LLM benchmark evaluates the performance of state-of-the-art l
 <tbody>
 <tr>
 <td align="center"><strong>Models</strong></td>
-<td>Claude-3.7-Sonnet, Claude-3.5-Sonnet, Claude-3.5-Haiku, Claude-Opus-4, Claude-Sonnet-4, Mistral-Large, Palmyra-fin, GPT-4o, O3-mini, O4-mini, GPT-4.1, GPT-4.1-mini, GPT-4.1-nano, Grok-3, Grok-3-mini-beta (high/low effort), Gemini-2.5-Pro, Gemini-2.5-Flash, Deepseek-R1, Llama-4-Maverick, Llama-4-Scout, Llama-3.3-70B, Llama-3.1-8B-instant</td>
-<td align="center"><strong>23+</strong></td>
+<td>Claude-3.7-Sonnet, Claude-3.5-Sonnet, Claude-3.5-Haiku, Claude-Opus-4, Claude-Sonnet-4, Mistral-Large, Palmyra-fin, GPT-4o, O3-mini, O4-mini, GPT-4.1, GPT-4.1-mini, GPT-4.1-nano, Grok-3, Grok-3-mini-beta (high/low effort), Gemini-2.5-Pro, Gemini-2.5-Flash, Deepseek-R1, Llama-4-Maverick, Llama-4-Scout, Llama-3.3-70B, Llama-3.1-8B-instant, Grok (XAI)        | `grok-3-mini-beta-high-effort`   | Reasoning Enhanced (XAI Proprietary) | N/A         | N/A          | N/A          | N/A          |
+| Grok (XAI)        | `grok-3-mini-beta-low-effort`    | Reasoning Enhanced (XAI Proprietary) | N/A         | N/A          | N/A          | N/A          |
+| OpenAI            | `o3-pro`                         | Frontier Model (OpenAI Proprietary)  | *(new)*     | *(new)*      | *(new)*      | *(new)*      |
+| OpenAI            | `o3`                             | Frontier Model (OpenAI Proprietary)  | 73.3%       | 68.3%        | 76.7%        | 76.7%        |
+| OpenAI            | `o3-mini`                        | Frontier Model (OpenAI Proprietary)  | 61.7%       | 51.7%        | 63.3%        | 60.0%        |
+| OpenAI            | `o4-mini`                        | Frontier Model (OpenAI Proprietary)  | 70.0%       | 70.0%        | 73.3%        | 71.7%        |
+</td>
+<td align="center"><strong>24+</strong></td>
 </tr>
 <tr>
 <td align="center"><strong>Strategies</strong></td>
@@ -46,7 +52,7 @@ This comprehensive LLM benchmark evaluates the performance of state-of-the-art l
 </tbody>
 </table>
 
-This benchmark analyzes over 23 state-of-the-art LLMs across multiple reasoning strategies, measuring 11 performance metrics, and generating 18+ detailed visualization plots to evaluate and compare their performance on CFA multiple-choice questions.
+This benchmark analyzes over 24 state-of-the-art LLMs across multiple reasoning strategies, measuring 11 performance metrics, and generating 18+ detailed visualization plots to evaluate and compare their performance on CFA multiple-choice questions.
 
 ## Project Structure
 
@@ -219,7 +225,7 @@ The program now includes several UI enhancements:
 ## Configuration
 
 -   **Supported LLM Providers and Models:** This project is designed to work with a variety of LLM providers. Support is integrated for:
-    - OpenAI (e.g., GPT-4o, GPT-4.1 series)
+    - OpenAI (e.g., GPT-4o, GPT-4.1 series,o3-mini, o4-mini, o3-pro). For `o3-pro` models (e.g., `o3-pro-2025-06-10`), the project utilizes the new `responses.create` endpoint, supporting the `reasoning` parameter (e.g., `{\"effort\": \"high\"}`) and distinct token types (input, completion, reasoning) for cost and performance analysis.
     - Google Gemini (e.g., Gemini 2.5 Pro, Gemini 2.5 Flash with `thinking_budget`). Requires `google-genai>=1.10.0` (version `1.15.0` confirmed working) for `ThinkingConfig` support.
     - Anthropic (e.g., Claude 3.7 Sonnet, Claude 3.5 Sonnet & Haiku)
     - Groq (e.g., Llama 4 Maverick/Scout, Llama 3.3 70B, Llama 3.1 8B, with `reasoning_effort` for Grok models)
