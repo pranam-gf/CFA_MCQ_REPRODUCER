@@ -25,12 +25,7 @@ This comprehensive LLM benchmark evaluates the performance of state-of-the-art l
 <tbody>
 <tr>
 <td align="center"><strong>Models</strong></td>
-<td>Claude-3.7-Sonnet, Claude-3.5-Sonnet, Claude-3.5-Haiku, Claude-Opus-4, Claude-Sonnet-4, Mistral-Large, Palmyra-fin, GPT-4o, O3-mini, O4-mini, GPT-4.1, GPT-4.1-mini, GPT-4.1-nano, Grok-3, Grok-3-mini-beta (high/low effort), Gemini-2.5-Pro, Gemini-2.5-Flash, Deepseek-R1, Llama-4-Maverick, Llama-4-Scout, Llama-3.3-70B, Llama-3.1-8B-instant, Grok (XAI)        | `grok-3-mini-beta-high-effort`   | Reasoning Enhanced (XAI Proprietary) | N/A         | N/A          | N/A          | N/A          |
-| Grok (XAI)        | `grok-3-mini-beta-low-effort`    | Reasoning Enhanced (XAI Proprietary) | N/A         | N/A          | N/A          | N/A          |
-| OpenAI            | `o3-pro`                         | Frontier Model (OpenAI Proprietary)  | *(new)*     | *(new)*      | *(new)*      | *(new)*      |
-| OpenAI            | `o3`                             | Frontier Model (OpenAI Proprietary)  | 73.3%       | 68.3%        | 76.7%        | 76.7%        |
-| OpenAI            | `o3-mini`                        | Frontier Model (OpenAI Proprietary)  | 61.7%       | 51.7%        | 63.3%        | 60.0%        |
-| OpenAI            | `o4-mini`                        | Frontier Model (OpenAI Proprietary)  | 70.0%       | 70.0%        | 73.3%        | 71.7%        |
+<td>Claude-3.7-Sonnet, Claude-3.5-Sonnet, Claude-3.5-Haiku, Claude-Opus-4, Claude-Opus-4.1, Claude-Sonnet-4, Mistral-Large, Palmyra-fin, GPT-oss-20B, GPT-oss-120B, GPT-5, GTP-5-mini, GPT-5-nano, GPT-4o, o3-mini, o4-mini, GPT-4.1, GPT-4.1-mini, GPT-4.1-nano, Grok-3, Grok-3-mini-beta (high/low effort), Grok-4, Gemini-2.5-Pro, Gemini-2.5-Flash, Deepseek-R1, Llama-4-Maverick, Llama-4-Scout, Llama-3.3-70B, Llama-3.1-8B-instant, Kimi-K2, Qwen3-32B, 
 </td>
 <td align="center"><strong>24+</strong></td>
 </tr>
