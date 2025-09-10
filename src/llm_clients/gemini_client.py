@@ -3,8 +3,12 @@ Google Gemini client for handling Gemini models.
 """
 import time
 import logging
-from google import genai
-from google.genai import types
+try:
+    import google.generativeai as genai
+    from google.generativeai import types
+except ImportError:
+    genai = None
+    types = None
 from .. import config
 
 logger = logging.getLogger(__name__)
@@ -27,6 +31,10 @@ def get_gemini_response(prompt: str | list[dict[str, str]], model_config: dict, 
     parameters = model_config.get("parameters", {}).copy()
     
     start_time = time.time()
+    
+    if genai is None:
+        logger.error(f"Google Generative AI library not available for model {config_id}")
+        return {"error_message": "Google Generative AI library not installed", "response_time": time.time() - start_time}
     
     if not config.GEMINI_API_KEY:
         logger.error(f"Missing Gemini API key for model {config_id}")

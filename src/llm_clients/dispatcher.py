@@ -79,6 +79,7 @@ def get_llm_response(prompt: str | list[dict[str, str]], model_config: dict, is_
         "parsed_json_response": parsed_content if is_json_response_expected else None,
         "full_response_data": {},
         "latency_ms": raw_response.get("response_time", 0) * 1000,
+        "response_time": raw_response.get("response_time", 0),  # Keep original response_time for strategies
         "input_tokens": raw_response.get("input_tokens", 0),
         "output_tokens": raw_response.get("output_tokens", 0),
         "reasoning_tokens": raw_response.get("reasoning_tokens", 0),

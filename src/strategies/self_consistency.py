@@ -194,7 +194,9 @@ def run_self_consistency_strategy(data: list[dict], model_config_item: dict, cot
         else:
             is_correct = (final_voted_answer == correct_answer_str)
 
-        avg_response_time = sum(s.get('response_time', 0) for s in sample_responses if s.get('response_time')) / len(sample_responses) if sample_responses else 0
+        # Fix: Include 0.0 response times in averaging, only exclude None values
+        valid_response_times = [s.get('response_time', 0) for s in sample_responses if s.get('response_time') is not None]
+        avg_response_time = sum(valid_response_times) / len(valid_response_times) if valid_response_times else 0
         total_input_tokens = sum(s.get('input_tokens', 0) for s in sample_responses if s.get('input_tokens') is not None)
         total_output_tokens = sum(s.get('output_tokens', 0) for s in sample_responses if s.get('output_tokens') is not None)
 

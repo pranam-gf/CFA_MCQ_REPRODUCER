@@ -5,6 +5,7 @@ import logging
 import sys
 import threading
 import re 
+import time
 from .. import llm_clients 
 from ..utils import ui_utils
 from ..utils.prompt_utils import parse_question_data
@@ -54,7 +55,11 @@ def run_default_strategy(data: list[dict], model_config_item: dict) -> list[dict
         
         prompt = generate_prompt_for_default_strategy(entry, model_type=model_type)
         
+        # Add timing fallback mechanism similar to self-discover strategy
+        start_time = time.time()
         llm_data = llm_clients.get_llm_response(prompt, model_config_item)
+        end_time = time.time()
+        elapsed_time = end_time - start_time
 
         llm_answer = ""
         is_correct = None
@@ -67,6 +72,9 @@ def run_default_strategy(data: list[dict], model_config_item: dict) -> list[dict
 
         if llm_data:
             response_time = llm_data.get('response_time')
+            # Fallback to measured time if LLM client didn't provide response_time
+            if response_time is None:
+                response_time = elapsed_time
             current_input_tokens = llm_data.get('input_tokens')
             current_output_tokens = llm_data.get('output_tokens')
             raw_response_text = llm_data.get('raw_response_text')
@@ -116,6 +124,8 @@ def run_default_strategy(data: list[dict], model_config_item: dict) -> list[dict
             logger.error(f"Q {i + 1} ({config_id}): Failed to get any valid LLM response (API call likely failed).")
             llm_answer = "ERROR"
             is_correct = False
+            # Use elapsed time as fallback when LLM call fails
+            response_time = elapsed_time
 
         updated_entry = entry.copy()
         updated_entry.update({
@@ -134,4 +144,4 @@ def run_default_strategy(data: list[dict], model_config_item: dict) -> list[dict
     if loading_animation: 
         loading_animation.stop()
         
-    return results 
+    return results
